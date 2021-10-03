@@ -201,9 +201,13 @@ static inline s64 timekeeping_get_ns(struct tk_read_base *tkr)
 
 	/* calculate the delta since the last update_wall_time: */
 	delta = clocksource_delta(cycle_now, tkr->cycle_last, tkr->mask);
-
+#ifndef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 9282d8b196725d802a57a757e78a3c74cccb9708
 	nsec = delta * tkr->mult + tkr->xtime_nsec;
 	nsec >>= tkr->shift;
+#else
+	nsec = (delta * tkr->mult + tkr->xtime_nsec) >> tkr->shift;
+#endif
 
 	/* If arch requires, add in get_arch_timeoffset() */
 	return nsec + arch_gettimeoffset();

@@ -2753,6 +2753,10 @@ static int dsi_event_thread(void *data)
 			mdss_dsi_pll_relock(ctrl);
 
 		if (todo & DSI_EV_DLNx_FIFO_UNDERFLOW) {
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/03/11  Add for debug reboot surfaceflinger die */
+            pr_err("%s: DSI_EV_MDP_FIFO_UNDERFLOW",__func__);
+#endif /*VENDOR_EDIT*/
 			mutex_lock(&ctrl->mutex);
 			if (ctrl->recovery) {
 				pr_debug("%s: Handling underflow event\n",
@@ -2958,6 +2962,13 @@ static bool mdss_dsi_fifo_status(struct mdss_dsi_ctrl_pdata *ctrl)
 		MIPI_OUTP(base + 0x000c, status);
 
 		pr_err("%s: status=%x\n", __func__, status);
+
+		/*
+		* if DSI FIFO overflow is masked,
+		* do not report overflow error
+		*/
+		if (MIPI_INP(base + 0x10c) & 0xf0000)
+			status = status & 0xaaaaffff;
 
 		if (status & 0x44440000) {/* DLNx_HS_FIFO_OVERFLOW */
 			dsi_send_events(ctrl, DSI_EV_DLNx_FIFO_OVERFLOW, 0);

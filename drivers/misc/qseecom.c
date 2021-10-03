@@ -79,6 +79,9 @@
 /* Encrypt/Decrypt Data Integrity Partition (DIP) for MDTP */
 #define SCM_MDTP_CIPHER_DIP		0x01
 
+/* Maximum Allowed Size (128K) of Data Integrity Partition (DIP) for MDTP */
+#define MAX_DIP			0x20000
+
 #define RPMB_SERVICE			0x2000
 #define SSD_SERVICE			0x3000
 
@@ -2239,6 +2242,8 @@ static int qseecom_unload_app(struct qseecom_dev_handle *data,
 				if (!strcmp((void *)ptr_app->app_name,
 					(void *)data->client.app_name)) {
 					found_app = true;
+					if (ptr_app->app_blocked)
+						app_crash = false;
 					if (app_crash || ptr_app->ref_cnt == 1)
 						unload = true;
 					break;
@@ -2578,7 +2583,11 @@ static int qseecom_send_service_cmd(struct qseecom_dev_handle *data,
 		}
 		if (req.cmd_id == QSEOS_RPMB_CHECK_PROV_STATUS_COMMAND) {
 			pr_warn("RPMB key status is 0x%x\n", resp.result);
-			*(uint32_t *)req.resp_buf = resp.result;
+			if (put_user(resp.result,
+				(uint32_t __user *)req.resp_buf)) {
+				ret = -EINVAL;
+				goto exit;
+			}
 			ret = 0;
 		}
 		break;
@@ -5705,7 +5714,8 @@ static int qseecom_mdtp_cipher_dip(void __user *argp)
 		}
 
 		if (req.in_buf == NULL || req.out_buf == NULL ||
-			req.in_buf_size == 0 || req.out_buf_size == 0 ||
+			req.in_buf_size == 0 || req.in_buf_size > MAX_DIP ||
+			req.out_buf_size == 0 || req.out_buf_size > MAX_DIP ||
 				req.direction > 1) {
 				pr_err("invalid parameters\n");
 				ret = -EINVAL;
@@ -6032,10 +6042,15 @@ static int __qseecom_qteec_issue_cmd(struct qseecom_dev_handle *data,
 	void *cmd_buf = NULL;
 	size_t cmd_len;
 	struct sglist_info *table = data->sglistinfo_ptr;
+	void *req_ptr = NULL;
+	void *resp_ptr = NULL;
 
 	ret  = __qseecom_qteec_validate_msg(data, req);
 	if (ret)
 		return ret;
+		
+	req_ptr = req->req_ptr;
+	resp_ptr = req->resp_ptr;
 
 	/* find app_id & img_name from list */
 	spin_lock_irqsave(&qseecom.registered_app_list_lock, flags);
@@ -6053,6 +6068,11 @@ static int __qseecom_qteec_issue_cmd(struct qseecom_dev_handle *data,
 			(char *)data->client.app_name);
 		return -ENOENT;
 	}
+	
+	req->req_ptr = (void *)__qseecom_uvirt_to_kvirt(data,
+						(uintptr_t)req->req_ptr);
+	req->resp_ptr = (void *)__qseecom_uvirt_to_kvirt(data,
+						(uintptr_t)req->resp_ptr);
 
 	if ((cmd_id == QSEOS_TEE_OPEN_SESSION) ||
 			(cmd_id == QSEOS_TEE_REQUEST_CANCELLATION)) {
@@ -6065,10 +6085,10 @@ static int __qseecom_qteec_issue_cmd(struct qseecom_dev_handle *data,
 	if (qseecom.qsee_version < QSEE_VERSION_40) {
 		ireq.app_id = data->client.app_id;
 		ireq.req_ptr = (uint32_t)__qseecom_uvirt_to_kphys(data,
-						(uintptr_t)req->req_ptr);
+						(uintptr_t)req_ptr);
 		ireq.req_len = req->req_len;
 		ireq.resp_ptr = (uint32_t)__qseecom_uvirt_to_kphys(data,
-						(uintptr_t)req->resp_ptr);
+						(uintptr_t)resp_ptr);
 		ireq.resp_len = req->resp_len;
 		ireq.sglistinfo_ptr = (uint32_t)virt_to_phys(table);
 		ireq.sglistinfo_len = SGLISTINFO_TABLE_SIZE;
@@ -6079,10 +6099,10 @@ static int __qseecom_qteec_issue_cmd(struct qseecom_dev_handle *data,
 	} else {
 		ireq_64bit.app_id = data->client.app_id;
 		ireq_64bit.req_ptr = (uint64_t)__qseecom_uvirt_to_kphys(data,
-						(uintptr_t)req->req_ptr);
+						(uintptr_t)req_ptr);
 		ireq_64bit.req_len = req->req_len;
 		ireq_64bit.resp_ptr = (uint64_t)__qseecom_uvirt_to_kphys(data,
-						(uintptr_t)req->resp_ptr);
+						(uintptr_t)resp_ptr);
 		ireq_64bit.resp_len = req->resp_len;
 		if ((data->client.app_arch == ELFCLASS32) &&
 			((ireq_64bit.req_ptr >=
@@ -6588,7 +6608,11 @@ long qseecom_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			break;
 		}
 		pr_debug("SET_MEM_PARAM: qseecom addr = 0x%pK\n", data);
+		mutex_lock(&app_access_lock);
+		atomic_inc(&data->ioctl_count);
 		ret = qseecom_set_client_mem_param(data, argp);
+		atomic_dec(&data->ioctl_count);
+		mutex_unlock(&app_access_lock);
 		if (ret)
 			pr_err("failed Qqseecom_set_mem_param request: %d\n",
 								ret);

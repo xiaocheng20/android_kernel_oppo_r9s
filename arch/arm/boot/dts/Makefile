@@ -518,7 +518,17 @@ dtb-$(CONFIG_MACH_DOVE) += dove-cm-a510.dtb \
 dtb-$(CONFIG_ARCH_MEDIATEK) += mt6589-aquaris5.dtb
 
 #used for cleaning - not building
-subdir- := qcom
+#ifndef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/6/11 for boot mode 
+#subdir- := qcom
+#else
+#ifeq ($(OPPO_TARGET_DEVICE),MSM_16017)
+subdir- := 16017 16027 16061
+#else ifeq ($(OPPO_TARGET_DEVICE),MSM_16027)
+#subdir- := 16027
+#else
+#subdir- := 16061
+#endif
+#endif //VENDOR_EDIT
 endif
 
 dtbs: $(addprefix $(obj)/, $(DTB_LIST))

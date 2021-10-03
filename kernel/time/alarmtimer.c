@@ -30,6 +30,11 @@
 #include "lpm-levels.h"
 #endif
 #include <linux/workqueue.h>
+#ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,modified 2016.08.13 for 2 minutes may not power up
+#define ALARM_MINIMUM 120
+#define ALARM_DELTA 60
+#endif /*power off alarm timing*/
 
 /**
  * struct alarm_base - Alarm timer bases
@@ -146,6 +151,12 @@ void set_power_on_alarm(void)
 	rtc_tm_to_time(&rtc_time, &rtc_secs);
 	alarm_delta = wall_time.tv_sec - rtc_secs;
 	alarm_time = alarm_secs - alarm_delta;
+	
+#ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,modified 2016.08.13 for 2 minutes may not power up
+	if ((alarm_time - ALARM_MINIMUM) > rtc_secs)
+		alarm_time -= ALARM_DELTA;
+#endif
 
 	rtc_time_to_tm(alarm_time, &alarm.time);
 	alarm.enabled = 1;

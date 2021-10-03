@@ -22,6 +22,11 @@
 
 #include "kgsl_sync.h"
 
+#ifdef VENDOR_EDIT
+//wenhua.Leng@Swdp.MultiMedia.Display, 2016/09/01, Add for kgsl keylog
+#include <soc/oppo/mmkey_log.h>
+#endif /* VENDOR_EDIT */
+
 static void kgsl_sync_timeline_signal(struct sync_timeline *timeline,
 	unsigned int timestamp);
 
@@ -302,6 +307,10 @@ static void kgsl_sync_pt_log(struct sync_pt *sync_pt)
 {
 	struct kgsl_sync_pt *kpt = (struct kgsl_sync_pt *) sync_pt;
 	pr_info("-----\n");
+#ifdef VENDOR_EDIT
+//wenhua.Leng@Swdp.MultiMedia.Display, 2016/09/01, Add for kgsl keylog
+	mm_keylog_write("kgsl fence timeout\n", "GPU FENCE TIMEOUT\n", TYPE_FENCE_TIMEOUT);
+#endif /* VENDOR_EDIT */
 	kgsl_context_dump(kpt->context);
 	pr_info("-----\n");
 }

@@ -344,7 +344,12 @@ static loff_t ashmem_llseek(struct file *file, loff_t offset, int origin)
 		goto out;
 	}
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Kernel, 2016/08/30, enable ashmem file's lseek
+       ret = asma->file->f_op->llseek(asma->file, offset, origin);
+#else
 	ret = vfs_llseek(asma->file, offset, origin);
+#endif /* VENDOR_EDIT */
 	if (ret < 0)
 		goto out;
 
@@ -789,10 +794,12 @@ static long ashmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case ASHMEM_SET_SIZE:
 		ret = -EINVAL;
+		mutex_lock(&ashmem_mutex);
 		if (!asma->file) {
 			ret = 0;
 			asma->size = (size_t) arg;
 		}
+		mutex_unlock(&ashmem_mutex);
 		break;
 	case ASHMEM_GET_SIZE:
 		ret = asma->size;

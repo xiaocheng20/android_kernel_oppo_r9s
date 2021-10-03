@@ -30,7 +30,12 @@
 
 #define MAX_NUM_IRQS 14
 #define NUM_IRQ_REGS 2
+#ifndef VENDOR_EDIT
+//ping.zhang@PhoneSw.AudioDriver, 2017/02/14, Add for no response insert headphone
 #define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 700
+#else
+#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 2000
+#endif /* VENDOR_EDIT */
 
 #define BYTE_BIT_MASK(nr) (1UL << ((nr) % BITS_PER_BYTE))
 #define BIT_BYTE(nr) ((nr) / BITS_PER_BYTE)
@@ -210,14 +215,22 @@ static int get_irq_bit(int linux_irq)
 	return i;
 }
 
+#ifndef VENDOR_EDIT
+//Jianfeng.Qiu@Multimedia.AudioDriver.HeadsetDet, 2016/09/30, Delete for qcom patch to solve headset undetect issue
 static int get_order_irq(int  i)
 {
 	return order[i];
 }
+#endif /* VENDOR_EDIT */
 
 static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 {
+    #ifndef VENDOR_EDIT
+    //Jianfeng.Qiu@Multimedia.AudioDriver.HeadsetDet, 2016/09/30, Modify for qcom patch to solve headset undetect issue
 	int irq, i, j;
+    #else /* VENDOR_EDIT */
+    int irq, i;
+    #endif /* VENDOR_EDIT */
 	unsigned long status[NUM_IRQ_REGS] = {0};
 
 	if (unlikely(wcd9xxx_spmi_lock_sleep() == false)) {
@@ -236,6 +249,8 @@ static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 			MSM8X16_WCD_A_DIGITAL_INT_LATCHED_STS);
 		status[i] &= ~map.mask[i];
 	}
+    #ifndef VENDOR_EDIT
+    //Jianfeng.Qiu@Multimedia.AudioDriver.HeadsetDet, 2016/09/30, Modify for qcom patch to solve headset undetect issue
 	for (i = 0; i < MAX_NUM_IRQS; i++) {
 		j = get_order_irq(i);
 		if ((status[BIT_BYTE(j)] & BYTE_BIT_MASK(j)) &&
@@ -246,6 +261,9 @@ static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 					BYTE_BIT_MASK(j);
 		}
 	}
+    #else /* VENDOR_EDIT */
+    map.handler[irq](irq, data);
+    #endif /* VENDOR_EDIT */
 	map.handled[BIT_BYTE(irq)] &= ~BYTE_BIT_MASK(irq);
 	wcd9xxx_spmi_unlock_sleep();
 

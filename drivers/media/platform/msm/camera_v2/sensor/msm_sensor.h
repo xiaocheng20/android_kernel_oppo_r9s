@@ -38,6 +38,14 @@
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20160821 for [module vendor info]*/
+struct int_string_pair {
+	uint16_t value;
+	char string[20];
+};
+#endif
+
 enum msm_sensor_sensor_slave_info_type {
 	MSM_SENSOR_SLAVEADDR_DATA,
 	MSM_SENSOR_IDREGADDR_DATA,

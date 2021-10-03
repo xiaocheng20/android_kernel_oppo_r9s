@@ -69,6 +69,11 @@
 #ifndef ARCH_SHF_SMALL
 #define ARCH_SHF_SMALL 0
 #endif
+#ifdef VENDOR_EDIT
+//Pan.Zhang@Connectivity.WiFi.Basic.Log, 2016/01/04,
+//Add for [FB1]: wifi critic log.
+#include <soc/oppo/mmkey_log.h>
+#endif /* VENDOR_EDIT */
 
 /*
  * Modules' sections will be aligned on page boundaries
@@ -1168,6 +1173,13 @@ static int check_version(Elf_Shdr *sechdrs,
 	return 0;
 
 bad_version:
+    #ifdef VENDOR_EDIT
+    //Pan.Zhang@Connectivity.WiFi.Basic.Log, 2016/01/04,
+    //Add for [FB1]: wifi critic log.
+    if(strncmp(mod->name, "wlan", 4) == 0) {
+        mm_keylog_write("disagrees about version of symbol", "disagree", TYPE_SYMBOL_VERSION_DISAGREE);
+    }
+    #endif /* VENDOR_EDIT */
 	printk("%s: disagrees about version of symbol %s\n",
 	       mod->name, symname);
 	return 0;

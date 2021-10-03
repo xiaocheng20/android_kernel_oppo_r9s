@@ -518,7 +518,8 @@ static void bulk_out_complete(struct usb_ep *ep, struct usb_request *req)
 
 	if (req->status || req->actual != bh->bulk_out_intended_length)
 		pr_debug("%s --> %d, %u/%u\n", __func__,
-		    req->status, req->actual, bh->bulk_out_intended_length);
+		  req->status, req->actual, bh->bulk_out_intended_length);
+
 	if (req->status == -ECONNRESET)		/* Request was cancelled */
 		usb_ep_fifo_flush(ep);
 
@@ -532,6 +533,7 @@ static void bulk_out_complete(struct usb_ep *ep, struct usb_request *req)
 		bh->outreq_busy = 0;
 		return;
 	}
+
 
 	dump_msg(common, "bulk-out", req->buf, req->actual);
 	spin_lock(&common->lock);

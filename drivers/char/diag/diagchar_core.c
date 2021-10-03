@@ -363,8 +363,8 @@ static int diagchar_open(struct inode *inode, struct file *file)
 	return -ENOMEM;
 
 fail:
-	mutex_unlock(&driver->diagchar_mutex);
 	driver->num_clients--;
+	mutex_unlock(&driver->diagchar_mutex);
 	pr_err_ratelimited("diag: Insufficient memory for new client");
 	return -ENOMEM;
 }
@@ -3331,6 +3331,8 @@ static int __init diagchar_init(void)
 	mutex_init(&driver->delayed_rsp_mutex);
 	mutex_init(&apps_data_mutex);
 	mutex_init(&driver->diagfwd_channel_mutex);
+	mutex_init(&driver->msg_mask_lock);
+	mutex_init(&driver->hdlc_recovery_mutex);
 	init_waitqueue_head(&driver->wait_q);
 	INIT_WORK(&(driver->diag_drain_work), diag_drain_work_fn);
 	INIT_WORK(&(driver->update_user_clients),

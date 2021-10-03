@@ -1014,9 +1014,22 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
 		return 0;
 
 	radix_tree_for_each_slot(slot, root, &iter, first_index) {
+#ifndef VENDOR_EDIT
+/* Hui.Fan@BSP.Kernel.Lib, 2016-09-12
+ * merge kernel community patch to fix radix-tree race in gang lookup
+ */
 		results[ret] = indirect_to_ptr(rcu_dereference_raw(*slot));
+#else
+		results[ret] = rcu_dereference_raw(*slot);
+#endif /* VENDOR_EDIT */
 		if (!results[ret])
 			continue;
+#ifdef VENDOR_EDIT
+		if (radix_tree_is_indirect_ptr(results[ret])) {
+			slot = radix_tree_iter_retry(&iter);
+			continue;
+		}
+#endif /* VENDOR_EDIT */
 		if (++ret == max_items)
 			break;
 	}
@@ -1136,9 +1149,22 @@ radix_tree_gang_lookup_tag(struct radix_tree_root *root, void **results,
 		return 0;
 
 	radix_tree_for_each_tagged(slot, root, &iter, first_index, tag) {
+#ifndef VENDOR_EDIT
+/* Hui.Fan@BSP.Kernel.Lib, 2016-09-12
+ * merge kernel community patch to fix radix-tree race in gang lookup
+ */
 		results[ret] = indirect_to_ptr(rcu_dereference_raw(*slot));
+#else
+		results[ret] = rcu_dereference_raw(*slot);
+#endif /* VENDOR_EDIT */
 		if (!results[ret])
 			continue;
+#ifdef VENDOR_EDIT
+		if (radix_tree_is_indirect_ptr(results[ret])) {
+			slot = radix_tree_iter_retry(&iter);
+			continue;
+		}
+#endif /* VENDOR_EDIT */
 		if (++ret == max_items)
 			break;
 	}

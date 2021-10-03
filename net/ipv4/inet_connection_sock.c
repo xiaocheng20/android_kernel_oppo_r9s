@@ -686,6 +686,7 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 		inet_sk(newsk)->inet_sport = htons(inet_rsk(req)->ir_num);
 		newsk->sk_write_space = sk_stream_write_space;
 
+		inet_sk(newsk)->mc_list = NULL;
 		newsk->sk_mark = inet_rsk(req)->ir_mark;
 
 		newicsk->icsk_retransmits = 0;
@@ -937,6 +938,17 @@ struct dst_entry *inet_csk_update_pmtu(struct sock *sk, u32 mtu)
 			goto out;
 	}
 	dst->ops->update_pmtu(dst, sk, NULL, mtu);
+
+    #ifdef VENDOR_EDIT
+    //Rongzheng.tang@Connectivity.WiFi.Network.internet.873764, 2016/11/03,
+    //When receives ICMP_FRAG_NEEDED, reduces the mtu of net_device.
+    pr_err("%s: current_mtu = %d , frag_mtu = %d \n", __func__, dst->dev->mtu, dst_mtu(dst));
+
+    if(dst->dev->mtu > dst_mtu(dst) && dst_mtu(dst) > 1280)
+    {
+       dst->dev->mtu = dst_mtu(dst);
+    }
+    #endif /* VENDOR_EDIT */
 
 	dst = __sk_dst_check(sk, 0);
 	if (!dst)

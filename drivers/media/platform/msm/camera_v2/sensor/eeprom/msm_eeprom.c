@@ -17,6 +17,10 @@
 #include "msm_sd.h"
 #include "msm_cci.h"
 #include "msm_eeprom.h"
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20160630 for merge basic modification*/
+#include <linux/proc_fs.h>
+#endif
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
@@ -1576,6 +1580,261 @@ static long msm_eeprom_subdev_fops_ioctl32(struct file *file, unsigned int cmd,
 
 #endif
 
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20160630 for merge basic modification*/
+uint16_t rear_module = 0;
+uint16_t rear_sensor = 0;
+static void msm_eeprom_read_rear_moduleinfo(struct msm_eeprom_ctrl_t *e_ctrl)
+{
+    int rc=0, rc1 = 0,rc2=0;
+    uint16_t read_data=0, read_data1 = 0, read_data2 =0,id_low,id_high;
+   
+    e_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+
+    rc1 = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+            		&e_ctrl->i2c_client, 0x0031,
+            		&read_data1, MSM_CAMERA_I2C_BYTE_DATA);
+    if (rc1 < 0) {
+		  pr_err("%s read 0x0031 failed\n", __func__);
+	}
+    rc2 = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+            		&e_ctrl->i2c_client, 0x0042,
+            		&read_data2, MSM_CAMERA_I2C_BYTE_DATA);
+    if (rc2 < 0) {
+		  pr_err("%s read 0x0042 failed\n", __func__);
+	}
+    if((rc1<0)&&(rc2<0)){
+        pr_err("%s read rear module flag failed\n", __func__);
+        return;
+    }
+
+    if ((read_data1 == 0x01)||(read_data2 == 0x01)) {
+        int i;
+        uint16_t sum1 = 0, read_value = 0;
+        for (i = 0; i <= 0x1B; i++) {
+            rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, i,
+        		&read_data, MSM_CAMERA_I2C_BYTE_DATA);
+            if (rc < 0) {
+        		pr_err("%s read 0x%x fail\n", __func__, i);
+        	} else {
+        	    if (i == 0) {
+                    read_value = read_data;
+                    //pr_err("%s read 0x%x=%d\n", __func__, i, read_value);
+        	    }
+                sum1 += read_data;
+            }
+        }
+        sum1 = sum1%255;
+
+        rc1 = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0032,
+        		&read_data1, MSM_CAMERA_I2C_BYTE_DATA);
+        rc2 = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+       		&e_ctrl->i2c_client, 0x0043,
+       		&read_data2, MSM_CAMERA_I2C_BYTE_DATA);
+
+        if ((sum1 != read_data1)&&(sum1 != read_data2)) {
+            pr_err("%s read module info checksum failed\n", __func__);
+            return;      
+        }
+
+  
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0000,
+        		&id_low, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0000 failed\n", __func__);
+        }
+        
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0001,
+        		&id_high, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0001 failed\n", __func__);
+        }
+
+       rear_module=(id_high<<8)|id_low;
+       pr_err("%s rear module ID =%d\n", __func__,rear_module);
+
+       id_low=0;
+       id_high=0;
+       rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+               &e_ctrl->i2c_client, 0x0006,
+               &id_low, MSM_CAMERA_I2C_BYTE_DATA);
+       if (rc < 0) {
+           pr_err("%s read 0x0000 failed\n", __func__);
+       }
+ 
+       rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+               &e_ctrl->i2c_client, 0x0007,
+               &id_high, MSM_CAMERA_I2C_BYTE_DATA);
+       if (rc < 0) {
+           pr_err("%s read 0x0001 failed\n", __func__);
+       }
+
+       rear_sensor=(id_high<<8)|id_low;
+       pr_err("%s rear sensor ID =%d\n", __func__,rear_sensor);
+
+    }
+}
+//back module info
+static ssize_t rear_eeprom_proc_read(struct file *filp, char __user *buff,
+                        	size_t len, loff_t *data)
+{
+    char value[2] = {0};
+
+    snprintf(value, sizeof(value), "%d", rear_module);
+
+    CDBG("%s,module_info=%d,value=%s\n", __func__,rear_module,value);
+    return simple_read_from_buffer(buff, len, data, value,1);
+    return rear_module;
+}
+
+static const struct file_operations rear_eeprom__fops = {
+    .owner		= THIS_MODULE,
+    .read		= rear_eeprom_proc_read,
+};
+
+static int msm_eeprom_rear_proc_init(void)
+{
+    int ret=0;
+    struct proc_dir_entry *proc_entry;
+
+    proc_entry = proc_create_data("rear_eeprom_info", 0666, NULL, &rear_eeprom__fops, NULL);
+    if (proc_entry == NULL)
+    {
+		ret = -ENOMEM;
+	  	pr_err("[%s]: Error! Couldn't create rear eeprom_info proc entry\n", __func__);
+    }
+    return ret;
+}
+
+uint16_t front_module = 0;
+uint16_t front_sensor = 0;
+
+static void msm_eeprom_read_front_moduleinfo(struct msm_eeprom_ctrl_t *e_ctrl)
+{
+    int rc = 0;
+    uint16_t read_data = 0,id_low,id_high;
+
+    e_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+
+    rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+            		&e_ctrl->i2c_client, 0x0042,
+            		&read_data, MSM_CAMERA_I2C_BYTE_DATA);
+    if (rc < 0) {
+		  pr_err("%s read 0x0042 failed\n", __func__);
+      return;
+	} else {
+        CDBG("%s  module info flag=%d\n", __func__,read_data);
+    }
+
+    if (read_data == 0x01) {
+        int i;
+        uint16_t sum1 = 0, read_value = 0;
+        for (i = 0; i <= 0x1B; i++) {
+            rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, i,
+        		&read_data, MSM_CAMERA_I2C_BYTE_DATA);
+            if (rc < 0) {
+        		pr_err("%s read 0x%x fail\n", __func__, i);
+        	} else {
+        	    if (i == 0) {
+                    read_value = read_data;
+                    //pr_err("%s read 0x%x=%d\n", __func__, i, read_value);
+        	    }
+                sum1 += read_data;
+            }
+        }
+        sum1 = sum1%255;
+
+
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0043,
+        		&read_data, MSM_CAMERA_I2C_BYTE_DATA);
+
+        if (sum1 != read_data) {
+            pr_err("%s read module info fail,value=%d\n", __func__, read_value);
+            return;      
+        }
+
+
+        
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0000,
+        		&id_low, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0000 failed\n", __func__);
+        }
+        
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0001,
+        		&id_high, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0001 failed\n", __func__);
+        }
+             
+        front_module=(id_high<<8)|id_low;
+        pr_err("## %s front_module  ID =%x\n", __func__,front_module);
+        
+        id_low=0;
+        id_high=0;
+
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0006,
+        		&id_low, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0000 failed\n", __func__);
+        }
+  
+        rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read(
+        		&e_ctrl->i2c_client, 0x0007,
+        		&id_high, MSM_CAMERA_I2C_BYTE_DATA);
+        if (rc < 0) {
+            pr_err("%s read 0x0001 failed\n", __func__);
+        }
+	      
+        
+        front_sensor=(id_high<<8)|id_low;
+        pr_err("## %s front_sensor  ID =%x\n", __func__,front_sensor);
+  	
+    }
+}
+
+//front module info 
+static ssize_t front_eeprom_proc_read(struct file *filp, char __user *buff,
+                        	size_t len, loff_t *data)
+{
+    char value[2] = {0};
+
+    snprintf(value, sizeof(value), "%d", front_module);
+
+    CDBG("%s,module_info=%d,value=%s\n", __func__,front_module,value);
+    return simple_read_from_buffer(buff, len, data, value,1);
+}
+
+static const struct file_operations front_eeprom__fops = {
+    .owner		= THIS_MODULE,
+    .read		= front_eeprom_proc_read,
+};
+
+static int msm_eeprom_front_proc_init(void)
+{
+    int ret=0;
+    struct proc_dir_entry *proc_entry;
+
+    proc_entry = proc_create_data("front_eeprom_info", 0666, NULL, &front_eeprom__fops, NULL);
+    if (proc_entry == NULL)
+    {
+		ret = -ENOMEM;
+	  	pr_err("[%s]: Error! Couldn't create front eeprom_info proc entry\n", __func__);
+    }
+    return ret;
+}
+
+#endif
+
 static int msm_eeprom_platform_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -1716,6 +1975,18 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 			pr_err("failed rc %d\n", rc);
 			goto memdata_free;
 		}
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20160630 for merge basic modification*/
+		if((strcmp(eb_info->eeprom_name, "semco_cat24c64") == 0)
+		    ||(strcmp(eb_info->eeprom_name, "imx258_gt24c64") == 0)) {
+			msm_eeprom_read_rear_moduleinfo(e_ctrl);  
+			msm_eeprom_rear_proc_init();
+		}
+		if(strcmp(eb_info->eeprom_name, "m24c64s") == 0) {
+			msm_eeprom_read_front_moduleinfo(e_ctrl);
+			msm_eeprom_front_proc_init();
+		}
+#endif
 		rc = read_eeprom_memory(e_ctrl, &e_ctrl->cal_data);
 		if (rc < 0) {
 			pr_err("%s read_eeprom_memory failed\n", __func__);

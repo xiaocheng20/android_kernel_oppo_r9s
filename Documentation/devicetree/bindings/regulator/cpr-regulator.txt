@@ -722,6 +722,100 @@ Optional properties:
 - qcom,disable-closed-loop-in-pc:	Bool property to disable closed-loop CPR during
 				power-collapse. This can be enabled only for single core
 				designs. The property 'qcom,cpr-cpus' is required to enable this logic.
+- qcom,cpr-fuse-range-map:	A grouping of integer tuple lists where each tuple list (row)
+				defines a mapping from combinations of fuse parameter ranges
+				to fuse combo ID (i.e., map row index). Each tuple defines the
+				beginning and ending fuse parameter value that matches. The
+				number of tuples in each row is equal to the number of selection
+				fuse parameters used in "qcom,cpr-fuse-range-list". For MSM8940,
+				the fuse parameters are "foundry-id", "APC Iddq active",
+				"turbo targ volt", and "nom targ volt". The tuples in each row
+				correspond to the fuses in order:
+				"foundry-id", "APC Iddq active", "turbo targ volt", and "nom targ volt".
+				An example entry for foundry-id = '1', APC Iddq active >= '78', turbo
+				targ volt >= 48, and nom targ volt >= 41 is as shown below:
+					<1 1>, <78 255>, <48 63>, <41 63>
+
+				The number of rows in the property is arbitrary but used to size
+				other properties. qcom,cpr-fuse-range-corner-voltage-adjustment
+				and qcom,cpr-fuse-range-corner-quot-adjustment must be set to the
+				number of rows specified in this property.
+- qcom,cpr-fuse-range-list:	Array of quadruples in which each quadruple specifies a fuse location to
+				read in order to get the fuse selection parameter for qcom,cpr-fuse-range-map.
+				The number of quadruples specified in this property defines the number of
+				fuse selection parameters used in "qcom,cpr-fuse-range-map".
+				The 4 elements in one quadruple are:
+				[0]: => the fuse row number of the bits
+				[1]: => LSB bit position of the bits
+				[2]: => number of the bits
+				[3]: => fuse reading method, 0 for direct reading or 1 for SCM reading
+- qcom,cpr-fuse-range-corner-voltage-adjustment: Array of integer tuples of voltage adjustments in microvolts to be
+				added to the initial voltage values of each virtual corner.  The elements
+				in a tuple are ordered from lowest voltage corner to highest voltage corner.
+				Each tuple must be of the length equal to the number of virtual corners as
+				specified by the number of elements in the qcom,cpr-corner-map property.
+				The property must contain the same number of tuples as qcom,cpr-fuse-range-map.
+				These tuples are then mapped one-to-one in the order specified.  E.g. if the second
+				qcom,cpr-fuse-range-map tuple matches for a given device, then voltage adjustments
+				defined in the second qcom,cpr-fuse-range-corner-voltage-adjustment tuple will be
+				applied.
+- qcom,cpr-fuse-range-corner-quot-adjustment: Array of integer tuples of quotient offsets to be added to
+				the scaled target quotient of each virtual corner. The elements
+				in a tuple are ordered from lowest voltage corner to highest voltage corner.
+				Each tuple must be of the length equal to the number of virtual corners as
+				specified by the number of elements in the qcom,cpr-corner-map property.
+				The property must contain the same number of tuples as qcom,cpr-fuse-range-map.
+				These tuples are then mapped one-to-one in the order specified.  E.g. if the
+				second qcom,cpr-fuse-range-map tuple matches for a given device, then quotient
+				adjustments defined in the second qcom,cpr-fuse-range-corner-quot-adjustment tuple
+				will be applied.
+- qcom,cpr-fuse-range-map:	A grouping of integer tuple lists where each tuple list (row)
+				defines a mapping from combinations of fuse parameter ranges
+				to fuse combo ID (i.e., map row index). Each tuple defines the
+				beginning and ending fuse parameter value that matches. The
+				number of tuples in each row is equal to the number of selection
+				fuse parameters used in "qcom,cpr-fuse-range-list". For MSM8940,
+				the fuse parameters are "foundry-id", "APC Iddq active",
+				"turbo targ volt", and "nom targ volt". The tuples in each row
+				correspond to the fuses in order:
+				"foundry-id", "APC Iddq active", "turbo targ volt", and "nom targ volt".
+				An example entry for foundry-id = '1', APC Iddq active >= '78', turbo
+				targ volt >= 48, and nom targ volt >= 41 is as shown below:
+					<1 1>, <78 255>, <48 63>, <41 63>
+
+				The number of rows in the property is arbitrary but used to size
+				other properties. qcom,cpr-fuse-range-corner-voltage-adjustment
+				and qcom,cpr-fuse-range-corner-quot-adjustment must be set to the
+				number of rows specified in this property.
+- qcom,cpr-fuse-range-list:	Array of quadruples in which each quadruple specifies a fuse location to
+				read in order to get the fuse selection parameter for qcom,cpr-fuse-range-map.
+				The number of quadruples specified in this property defines the number of
+				fuse selection parameters used in "qcom,cpr-fuse-range-map".
+				The 4 elements in one quadruple are:
+				[0]: => the fuse row number of the bits
+				[1]: => LSB bit position of the bits
+				[2]: => number of the bits
+				[3]: => fuse reading method, 0 for direct reading or 1 for SCM reading
+- qcom,cpr-fuse-range-corner-voltage-adjustment: Array of integer tuples of voltage adjustments in microvolts to be
+				added to the initial voltage values of each virtual corner.  The elements
+				in a tuple are ordered from lowest voltage corner to highest voltage corner.
+				Each tuple must be of the length equal to the number of virtual corners as
+				specified by the number of elements in the qcom,cpr-corner-map property.
+				The property must contain the same number of tuples as qcom,cpr-fuse-range-map.
+				These tuples are then mapped one-to-one in the order specified.  E.g. if the second
+				qcom,cpr-fuse-range-map tuple matches for a given device, then voltage adjustments
+				defined in the second qcom,cpr-fuse-range-corner-voltage-adjustment tuple will be
+				applied.
+- qcom,cpr-fuse-range-corner-quot-adjustment: Array of integer tuples of quotient offsets to be added to
+				the scaled target quotient of each virtual corner. The elements
+				in a tuple are ordered from lowest voltage corner to highest voltage corner.
+				Each tuple must be of the length equal to the number of virtual corners as
+				specified by the number of elements in the qcom,cpr-corner-map property.
+				The property must contain the same number of tuples as qcom,cpr-fuse-range-map.
+				These tuples are then mapped one-to-one in the order specified.  E.g. if the
+				second qcom,cpr-fuse-range-map tuple matches for a given device, then quotient
+				adjustments defined in the second qcom,cpr-fuse-range-corner-quot-adjustment tuple
+				will be applied.				
 Example:
 	apc_vreg_corner: regulator@f9018000 {
 		status = "okay";

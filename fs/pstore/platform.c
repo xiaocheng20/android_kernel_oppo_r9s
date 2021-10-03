@@ -196,6 +196,8 @@ error:
 
 static void allocate_buf_for_compression(void)
 {
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv 2016-0815
+//yixue.ge@bsp.drv del for pstore log bug
 	size_t size;
 	size_t cmpr;
 
@@ -234,7 +236,7 @@ static void allocate_buf_for_compression(void)
 		pr_err("No memory for uncompressed data; skipping compression\n");
 		stream.workspace = NULL;
 	}
-
+#endif
 }
 
 /*

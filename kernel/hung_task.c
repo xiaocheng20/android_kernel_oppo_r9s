@@ -63,6 +63,7 @@ __setup("hung_task_panic=", hung_task_panic_setup);
 static int
 hung_task_panic(struct notifier_block *this, unsigned long event, void *ptr)
 {
+
 	did_panic = 1;
 
 	return NOTIFY_DONE;
@@ -72,17 +73,64 @@ static struct notifier_block panic_block = {
 	.notifier_call = hung_task_panic,
 };
 
+
+#ifdef VENDOR_EDIT
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, record the hung task killing
+ * format: task_name,reason. e.g. system_server,uninterruptible for 60 secs
+ */
+#define HUNG_TASK_OPPO_KILL_LEN	128
+char __read_mostly sysctl_hung_task_oppo_kill[HUNG_TASK_OPPO_KILL_LEN];
+char last_stopper_comm[64];
+#endif
+
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+//yixue.ge@PhoneSW.BSP,20170228 modify for use is_zygote64_process replace "main"
+static bool is_zygote64_process(struct task_struct *t)
+{
+	struct task_struct * first_child = NULL; 
+	const struct cred *tcred = __task_cred(t);
+	if(t->children.next && t->children.next != (struct list_head*)&t->children.next)
+		first_child = container_of(t->children.next, struct task_struct, sibling); 
+	if(!strcmp(t->comm, "main") && (tcred->uid.val == 0) && first_child != NULL && !strcmp(first_child->comm, "system_server"))
+		return true;
+	else
+		return false;
+	return false;
+}
+#endif
+
 static void check_hung_task(struct task_struct *t, unsigned long timeout)
 {
 	unsigned long switch_count = t->nvcsw + t->nivcsw;
+
+#ifdef VENDOR_EDIT
+	//white list
+	if(!strncmp(t->comm,"mdss_dsi_event", TASK_COMM_LEN)||
+		!strncmp(t->comm,"msm-core:sampli", TASK_COMM_LEN)||
+		!strncmp(t->comm,"kworker/u16:1", TASK_COMM_LEN)){
+		return;
+	}
+#endif
 
 	/*
 	 * Ensure the task is not frozen.
 	 * Also, skip vfork and any other user process that freezer should skip.
 	 */
 	if (unlikely(t->flags & (PF_FROZEN | PF_FREEZER_SKIP)))
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, kill D/T/t state tasks */
+	{
+		if (is_zygote64_process(t) || !strncmp(t->comm,"system_server", TASK_COMM_LEN)
+			|| !strncmp(t->comm,"surfaceflinger", TASK_COMM_LEN)) {
+			if (t->flags & PF_FROZEN)
+				return;
+		}
+		else
+			return;
+	}
+#else
 	    return;
-
+#endif
 	/*
 	 * When a freshly created task is scheduled once, changes its state to
 	 * TASK_UNINTERRUPTIBLE without having ever been switched out once, it
@@ -95,8 +143,36 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 		t->last_switch_count = switch_count;
 		return;
 	}
-
 	trace_sched_process_hang(t);
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+	/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, kill D/T/t state tasks */
+		if (is_zygote64_process(t) || !strncmp(t->comm,"system_server", TASK_COMM_LEN)
+			|| !strncmp(t->comm,"surfaceflinger", TASK_COMM_LEN) ) {
+			if (t->state == TASK_UNINTERRUPTIBLE)
+				snprintf(sysctl_hung_task_oppo_kill, HUNG_TASK_OPPO_KILL_LEN, "%s,uninterruptible for %ld seconds", t->comm, timeout);
+			else if (t->state == TASK_STOPPED)
+				snprintf(sysctl_hung_task_oppo_kill, HUNG_TASK_OPPO_KILL_LEN, "%s,stopped for %ld seconds", t->comm, timeout);
+			else if (t->state == TASK_TRACED)
+				snprintf(sysctl_hung_task_oppo_kill, HUNG_TASK_OPPO_KILL_LEN, "%s,traced for %ld seconds", t->comm, timeout);
+			else
+				snprintf(sysctl_hung_task_oppo_kill, HUNG_TASK_OPPO_KILL_LEN, "%s,unknown hung for %ld seconds", t->comm, timeout);
+	
+			printk(KERN_ERR "DeathHealer: task %s:%d blocked for more than %ld seconds in state 0x%lx.\n",
+				t->comm, t->pid, timeout, t->state);
+	#ifdef OPPO_AGING_TEST
+			BUG();
+	#else
+			sched_show_task(t);
+			debug_show_held_locks(t);
+			trigger_all_cpu_backtrace();
+
+			t->flags |= PF_OPPO_KILLING;
+			do_send_sig_info(SIGKILL, SEND_SIG_FORCED, t, true);
+			wake_up_process(t);
+	#endif
+		}
+#endif
+
 
 	if (!sysctl_hung_task_warnings)
 		return;
@@ -178,7 +254,12 @@ static void check_hung_uninterruptible_tasks(unsigned long timeout)
 				goto unlock;
 		}
 		/* use "==" to skip the TASK_KILLABLE tasks waiting on NFS */
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, detect D/T/t state tasks */
+		if (t->state == TASK_UNINTERRUPTIBLE || t->state == TASK_STOPPED || t->state == TASK_TRACED)
+#else
 		if (t->state == TASK_UNINTERRUPTIBLE)
+#endif
 			check_hung_task(t, timeout);
 	} while_each_thread(g, t);
  unlock:
@@ -245,7 +326,6 @@ static int __init hung_task_init(void)
 {
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_block);
 	watchdog_task = kthread_run(watchdog, NULL, "khungtaskd");
-
 	return 0;
 }
 subsys_initcall(hung_task_init);

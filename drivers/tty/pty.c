@@ -777,7 +777,7 @@ err_file:
 	return retval;
 }
 
-static struct file_operations ptmx_fops;
+static struct file_operations ptmx_fops __ro_after_init;
 
 static void __init unix98_pty_init(void)
 {

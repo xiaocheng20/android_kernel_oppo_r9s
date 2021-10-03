@@ -42,7 +42,12 @@ static const struct v4l2_subdev_internal_ops msm_sensor_init_internal_ops;
 static int msm_sensor_wait_for_probe_done(struct msm_sensor_init_t *s_init)
 {
 	int rc;
-	int tm = 10000;
+        #ifndef VENDOR_EDIT
+        /*modified by Tangtao@Camera 20170916 for [change timeout to 100s]*/
+        int tm = 10000;
+        #else
+        int tm = 100000;
+        #endif
 	if (s_init->module_init_status == 1) {
 		CDBG("msm_cam_get_module_init_status -2\n");
 		return 0;

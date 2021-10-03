@@ -865,6 +865,14 @@ static int qusb_phy_linestate_with_idp_src(struct usb_phy *phy)
 	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
 	u8 int_status, ret;
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/12/13 add for sdp detect error, case02728771
+	dev_err(phy->dev, "RESET QUSB PHY\n");
+	clk_reset(qphy->phy_reset, CLK_RESET_ASSERT);
+    usleep_range(100, 150);
+    clk_reset(qphy->phy_reset, CLK_RESET_DEASSERT);
+#endif /* VENDOR_EDIT */
+
 	/* Disable/powerdown the PHY */
 	writel_relaxed(CLAMP_N_EN | FREEZIO_N | POWER_DOWN,
 			qphy->base + QUSB2PHY_PORT_POWERDOWN);

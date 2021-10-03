@@ -68,6 +68,21 @@
 struct mdss_data_type *mdss_res;
 static u32 mem_protect_sd_ctrl_id;
 
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+#include <linux/proc_fs.h> 
+#include <asm/uaccess.h>
+static struct proc_dir_entry *lcd_dir = NULL;
+static struct proc_dir_entry *lcd_off_dir = NULL;
+static struct proc_dir_entry *parent = NULL;
+static char* lcd_node_name = "lcd_status";
+static char* lcd_off_node_name = "lcdoff_status";
+extern volatile unsigned int lcd_on;
+extern volatile unsigned int lcd_off_status;
+static DECLARE_WAIT_QUEUE_HEAD(lcd_notify);
+#define FP_WAIT_LCD_TIMEOUT 40
+#endif /*VENDOR_EDIT*/
+
 static int mdss_fb_mem_get_iommu_domain(void)
 {
 	return mdss_smmu_get_domain_id(MDSS_IOMMU_DOMAIN_UNSECURE);
@@ -1287,7 +1302,13 @@ static inline int mdss_mdp_irq_clk_register(struct mdss_data_type *mdata,
 static void __mdss_restore_sec_cfg(struct mdss_data_type *mdata)
 {
 	int ret, scm_ret = 0;
-
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    if(mdata->scm_set_allowable != true) {
+        //pr_err("%s Should not restore secure config allowable = %d\n", __func__, mdata->scm_set_allowable);
+        return;
+    }
+    #endif
 	if (test_bit(MDSS_CAPS_SCM_RESTORE_NOT_REQUIRED, mdata->mdss_caps_map))
 		return;
 
@@ -1299,6 +1320,17 @@ static void __mdss_restore_sec_cfg(struct mdss_data_type *mdata)
 	if (ret || scm_ret)
 		pr_warn("scm_restore_sec_cfg failed %d %d\n",
 				ret, scm_ret);
+				
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+    if(waitqueue_active(&lcd_notify))
+    {
+        lcd_on = 1 ;
+        pr_err("fp_unlock wake up by lcd start\n");
+        wake_up(&lcd_notify);
+        pr_err("fp_unlock wake up by lcd end\n");
+    }
+#endif /*VENDOR_EDIT*/
 
 	__mdss_mdp_reg_access_clk_enable(mdata, false);
 }
@@ -2162,6 +2194,60 @@ static struct attribute_group mdp_fs_attr_group = {
 	.attrs = mdp_fs_attrs
 };
 
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+static ssize_t lcd_node_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{	
+	char page[8]; 	
+	char *p = page;	
+	int len = 0; 
+	pr_err("fp_unlock wait lcd start\n");
+	wait_event_interruptible_timeout(lcd_notify, lcd_on,msecs_to_jiffies(FP_WAIT_LCD_TIMEOUT));
+	pr_err("fp_unlock wait lcd end\n");
+	p += sprintf(p, "%d", lcd_on);	
+	len = p - page;	
+	if (len > *pos)		
+		len -= *pos;	
+	else		
+		len = 0;	
+
+	if (copy_to_user(buf,page,len < count ? len  : count))		
+		return -EFAULT;	
+	*pos = *pos + (len < count ? len  : count);	
+
+	return len < count ? len  : count;
+}
+
+static ssize_t lcd_off_node_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{	
+	char page[8]; 	
+	char *p = page;	
+	int len = 0; 
+	p += sprintf(p, "%d", lcd_off_status);	
+	len = p - page;	
+	if (len > *pos)		
+		len -= *pos;	
+	else		
+		len = 0;	
+
+	if (copy_to_user(buf,page,len < count ? len  : count))		
+		return -EFAULT;	
+	*pos = *pos + (len < count ? len  : count);	
+
+	return len < count ? len  : count;
+}
+
+
+static struct file_operations lcd_node_ctrl = {
+	.read = lcd_node_read,
+};
+
+static struct file_operations lcd_off_node_ctrl = {
+	.read = lcd_off_node_read,
+};
+
+#endif//VENDOR_EDIT
+
 static int mdss_mdp_register_sysfs(struct mdss_data_type *mdata)
 {
 	struct device *dev = &mdata->pdev->dev;
@@ -2429,6 +2515,28 @@ probe_done:
 		mutex_destroy(&mdata->reg_lock);
 		mdss_res = NULL;
 	}
+	
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+	 if(!parent) {
+		parent =  proc_mkdir ("fp_unlock", NULL);
+		if(!parent) {
+			pr_err("can't create fp_unlock proc\n");
+		}
+	}
+
+	lcd_dir = proc_create_data (lcd_node_name, 0664, parent, &lcd_node_ctrl, NULL);
+	if(!lcd_dir) {
+		pr_err("create %s proc failed.\n", lcd_node_name);
+	}
+
+	lcd_off_dir = proc_create_data (lcd_off_node_name, 0664, parent, &lcd_off_node_ctrl, NULL);
+	if(!lcd_off_dir) {
+		pr_err("create %s proc failed.\n", lcd_off_node_name);
+	}
+	
+	init_waitqueue_head(&lcd_notify);
+#endif /*VENDOR_EDIT*/
 
 	return rc;
 }
@@ -2972,7 +3080,10 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 	u32 nfids = 0, len, nxids = 0, npipes = 0;
 	u32 sw_reset_offset = 0;
 	u32 data[4];
-
+#ifdef VENDOR_EDIT
+/* LiPing@PSW.MultiMedia.Display.LCD.Stability,2017/8/18,add for boe b8 LCD underrun */
+	char oppo_pan_name[MDSS_MAX_PANEL_LEN];
+#endif
 	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
 
 	mdata->has_pixel_ram = !mdss_mdp_parse_dt_prop_len(pdev,
@@ -2986,6 +3097,14 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 				"qcom,mdss-pipe-dma-off");
 	mdata->ncursor_pipes = mdss_mdp_parse_dt_prop_len(pdev,
 				"qcom,mdss-pipe-cursor-off");
+#ifdef VENDOR_EDIT
+/* LiPing@PSW.MultiMedia.Display.LCD.Stability,2017/8/18,add for boe b8 LCD underrun */
+	strlcpy(oppo_pan_name, &mdss_mdp_panel[0], MDSS_MAX_PANEL_LEN);
+	pr_err("oppo_pan_name:[%s] \n",oppo_pan_name);
+	if (!strcmp(oppo_pan_name,"1:dsi:0:qcom,mdss_dsi_oppo16061boe_nt35521s_b8_720p_video:1:none:cfg:single_dsi")) {
+		mdata->ncursor_pipes = 0;
+	}
+#endif
 
 	npipes = mdata->nvig_pipes + mdata->nrgb_pipes + mdata->ndma_pipes;
 

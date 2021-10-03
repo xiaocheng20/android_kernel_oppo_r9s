@@ -1447,7 +1447,6 @@ static void jbd2_mark_journal_empty(journal_t *journal, int write_op)
 	read_unlock(&journal->j_state_lock);
 
 	jbd2_write_superblock(journal, write_op);
-
 	/* Log is no longer empty */
 	write_lock(&journal->j_state_lock);
 	journal->j_flags |= JBD2_FLUSHED;
@@ -1709,6 +1708,7 @@ int jbd2_journal_destroy(journal_t *journal)
 	while (journal->j_checkpoint_transactions != NULL) {
 		spin_unlock(&journal->j_list_lock);
 		mutex_lock(&journal->j_checkpoint_mutex);
+
 		err = jbd2_log_do_checkpoint(journal);
 		mutex_unlock(&journal->j_checkpoint_mutex);
 		/*
@@ -1997,6 +1997,7 @@ int jbd2_journal_flush(journal_t *journal)
 	 * the magic code for a fully-recovered superblock.  Any future
 	 * commits of data to the journal will restore the current
 	 * s_start value. */
+
 	jbd2_mark_journal_empty(journal, WRITE_FUA);
 	mutex_unlock(&journal->j_checkpoint_mutex);
 	write_lock(&journal->j_state_lock);
@@ -2100,6 +2101,7 @@ static void __journal_abort_soft (journal_t *journal, int errno)
 		journal->j_flags |= JBD2_REC_ERR;
 		write_unlock(&journal->j_state_lock);
 	}
+
 }
 
 /**

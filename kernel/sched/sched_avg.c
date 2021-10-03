@@ -29,7 +29,12 @@ static DEFINE_PER_CPU(u64, nr);
 
 static DEFINE_PER_CPU(unsigned long, iowait_prod_sum);
 static DEFINE_PER_CPU(spinlock_t, nr_lock) = __SPIN_LOCK_UNLOCKED(nr_lock);
+#ifdef VENDOR_EDIT
+//xiaocheng.li@Swdp.shanghai, 2016/4/19, Add error handling to avoid BUG_ON()
+static u64 last_get_time;
+#else
 static s64 last_get_time;
+#endif
 
 /**
  * sched_get_nr_running_avg
@@ -84,6 +89,20 @@ void sched_get_nr_running_avg(int *avg, int *iowait_avg, int *big_avg)
 	diff = curr_time - last_get_time;
 	last_get_time = curr_time;
 
+#ifdef VENDOR_EDIT
+//xiaocheng.li@Swdp.shanghai, 2016/4/19, Add error handling to avoid BUG_ON()
+	tmp_avg = div64_u64(tmp_avg * 100, diff);
+	tmp_big_avg = div64_u64(tmp_big_avg * 100, diff);
+	tmp_iowait = div64_u64(tmp_iowait * 100, diff);
+
+	WARN_ON(tmp_avg > INT_MAX || tmp_big_avg > INT_MAX || tmp_iowait > INT_MAX);
+
+	*avg = tmp_avg > INT_MAX ? 0 : (int)tmp_avg;
+	*big_avg = tmp_big_avg > INT_MAX ? 0 : (int)tmp_big_avg;
+	*iowait_avg = tmp_iowait > INT_MAX ? 0 : (int)tmp_iowait;
+
+	trace_sched_get_nr_running_avg(*avg, *big_avg, *iowait_avg);
+#else
 	*avg = (int)div64_u64(tmp_avg * 100, diff);
 	*big_avg = (int)div64_u64(tmp_big_avg * 100, diff);
 	*iowait_avg = (int)div64_u64(tmp_iowait * 100, diff);
@@ -91,6 +110,7 @@ void sched_get_nr_running_avg(int *avg, int *iowait_avg, int *big_avg)
 	trace_sched_get_nr_running_avg(*avg, *big_avg, *iowait_avg);
 
 	BUG_ON(*avg < 0 || *big_avg < 0 || *iowait_avg < 0);
+#endif
 	pr_debug("%s - avg:%d big_avg:%d iowait_avg:%d\n",
 				 __func__, *avg, *big_avg, *iowait_avg);
 }

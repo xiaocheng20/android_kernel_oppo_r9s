@@ -178,8 +178,14 @@ void migrate_irqs(void)
 		raw_spin_unlock(&desc->lock);
 
 		if (affinity_broken && printk_ratelimit())
+#ifndef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, reduce unecessary log
 			pr_warn("IRQ%u no longer affine to CPU%u\n",
 				i, smp_processor_id());
+#else /* VENDOR_EDIT */
+			pr_debug("IRQ%u no longer affine to CPU%u\n", i,
+				smp_processor_id());
+#endif /* VENDOR_EDIT */
 	}
 
 	local_irq_restore(flags);

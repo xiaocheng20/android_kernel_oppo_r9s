@@ -92,7 +92,7 @@ struct msm_eeprom_cfg_data32 {
 	enum eeprom_cfg_type_t cfgtype;
 	uint8_t is_supported;
 	union {
-		char eeprom_name[MAX_SENSOR_NAME];
+		char eeprom_name[MAX_EEPROM_NAME];
 		struct eeprom_get_t get_data;
 		struct eeprom_read_t32 read_data;
 		struct eeprom_write_t32 write_data;
@@ -140,6 +140,11 @@ struct msm_actuator_params_t32 {
 	compat_uptr_t reg_tbl_params;
 	compat_uptr_t init_settings;
 	struct park_lens_data_t park_lens;
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20160808 for [park lens]*/
+	uint16_t deinit_setting_size;
+	compat_uptr_t deinit_settings;
+#endif
 };
 
 struct msm_actuator_set_info_t32 {

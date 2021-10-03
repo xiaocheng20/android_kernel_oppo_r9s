@@ -595,4 +595,8 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+
+# ifdef VENDOR_EDIT //Tong.han@BSP.Group.Tp, 2015/04/05, Add for KTD breath led
+source "drivers/misc/ktd_shineled/Kconfig"
+# endif
 endmenu

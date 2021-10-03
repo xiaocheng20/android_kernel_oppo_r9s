@@ -928,10 +928,9 @@ __pmic_arb_periph_irq(int irq, void *dev_id, bool show)
 	int first = pmic_arb->min_intr_apid >> 5;
 	int last = pmic_arb->max_intr_apid >> 5;
 	int i, j;
-	/* status based dispatch */
+
 	bool acc_valid = false;
 	u32 irq_status = 0;
-
 
 	dev_dbg(pmic_arb->dev, "Peripheral interrupt detected\n");
 

@@ -5865,6 +5865,7 @@ static int cpr3_panic_callback(struct notifier_block *nfb,
 				struct cpr3_controller, panic_notifier);
 	struct cpr3_panic_regs_info *regs_info = ctrl->panic_regs_info;
 	struct cpr3_reg_info *reg;
+
 	int i = 0;
 
 	for (i = 0; i < regs_info->reg_count; i++) {

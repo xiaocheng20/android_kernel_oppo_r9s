@@ -80,3 +80,8 @@ obj-$(CONFIG_MSM_BCL_CTL)	+= msm_bcl.o
 obj-$(CONFIG_MSM_BCL_PERIPHERAL_CTL) += bcl_peripheral.o
 obj-$(CONFIG_POWER_RESET)	+= reset/
 obj-$(CONFIG_ARCH_MSM)		+= qcom/
+#ifdef VENDOR_EDIT
+#Fuchun.Liao@Mobile.BSP.CHG 2016/06/13 modify for charge
+obj-$(CONFIG_OPPO_MSM8953_CHARGER)	+= pmic-voter.o
+obj-$(CONFIG_OPPO_MSM8953_CHARGER)	+= oppo/
+#endif

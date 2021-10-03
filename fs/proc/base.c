@@ -135,6 +135,15 @@ struct pid_entry {
 		NULL, &proc_single_file_operations,	\
 		{ .proc_show = show } )
 
+#ifdef VENDOR_EDIT
+//liangkun@Swdp.shanghai,2016/07/25 give read oom_adj permission to system process
+/* ANDROID is for special files in /proc. */
+#define ANDROID(NAME, MODE, OTYPE)			\
+	NOD(NAME, (S_IFREG|(MODE)),			\
+		&proc_##OTYPE##_inode_operations,	\
+		&proc_##OTYPE##_operations, {})
+#endif
+
 /*
  * Count the number of hardlinks for the pid_entry table, excluding the .
  * and .. links.
@@ -913,6 +922,28 @@ err_task_lock:
 out:
 	return err < 0 ? err : count;
 }
+
+#ifdef VENDOR_EDIT
+//liangkun@Swdp.shanghai,2016/07/25 give read oom_adj permission to system process
+static int oom_adjust_permission(struct inode *inode, int mask)
+{
+	/*
+	 * System Server (uid == 1000) is granted access to oom_adj
+	 */
+	if (current_fsuid().val == 1000) {
+		if (inode->i_mode >> 6 & mask) {
+			return 0;
+		}
+	}
+
+	/* Fall back to default. */
+	return generic_permission(inode, mask);
+}
+
+static const struct inode_operations proc_oom_adj_inode_operations = {
+	.permission	= oom_adjust_permission,
+};
+#endif
 
 static const struct file_operations proc_oom_adj_operations = {
 	.read		= oom_adj_read,
@@ -2543,10 +2574,13 @@ static int do_io_accounting(struct task_struct *task, struct seq_file *m, int wh
 	if (result)
 		return result;
 
+    #ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/10/09 add for resmon kernel module
+    #else
 	if (!ptrace_may_access(task, PTRACE_MODE_READ)) {
 		result = -EACCES;
 		goto out_unlock;
 	}
+	#endif
 
 	if (whole && lock_task_sighand(task, &flags)) {
 		struct task_struct *t = task;
@@ -2572,7 +2606,10 @@ static int do_io_accounting(struct task_struct *task, struct seq_file *m, int wh
 			(unsigned long long)acct.read_bytes,
 			(unsigned long long)acct.write_bytes,
 			(unsigned long long)acct.cancelled_write_bytes);
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/10/09 add for resmon kernel module
+#else
 out_unlock:
+#endif
 	mutex_unlock(&task->signal->cred_guard_mutex);
 	return result;
 }
@@ -2777,6 +2814,12 @@ static const struct pid_entry tgid_base_stuff[] = {
 	ONE("cmdline",    S_IRUGO, proc_pid_cmdline),
 	ONE("stat",       S_IRUGO, proc_tgid_stat),
 	ONE("statm",      S_IRUGO, proc_pid_statm),
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+	ONE("vmstate",     S_IRUGO, proc_pid_vmstat),
+#endif
+#endif
 	REG("maps",       S_IRUGO, proc_pid_maps_operations),
 #ifdef CONFIG_NUMA
 	REG("numa_maps",  S_IRUGO, proc_pid_numa_maps_operations),
@@ -2818,7 +2861,12 @@ static const struct pid_entry tgid_base_stuff[] = {
 	ONE("cgroup",  S_IRUGO, proc_cgroup_show),
 #endif
 	ONE("oom_score",  S_IRUGO, proc_oom_score),
+#ifdef VENDOR_EDIT
+//liangkun@Swdp.shanghai,2016/07/25 give read oom_adj permission to system process
+	ANDROID("oom_adj", S_IRUSR|S_IRGRP, oom_adj),
+#else
 	REG("oom_adj",    S_IRUSR, proc_oom_adj_operations),
+#endif
 	REG("oom_score_adj", S_IRUSR, proc_oom_score_adj_operations),
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",   S_IWUSR|S_IRUGO, proc_loginuid_operations),
@@ -2831,7 +2879,11 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("coredump_filter", S_IRUGO|S_IWUSR, proc_coredump_filter_operations),
 #endif
 #ifdef CONFIG_TASK_IO_ACCOUNTING
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/09/29 add for IO stats
+	ONE("io",	S_IRUSR | S_IRGRP | S_IROTH, proc_tgid_io_accounting),
+#else
 	ONE("io",	S_IRUSR, proc_tgid_io_accounting),
+#endif
 #endif
 #ifdef CONFIG_HARDWALL
 	ONE("hardwall",   S_IRUGO, proc_pid_hardwall),
@@ -3123,6 +3175,12 @@ static const struct pid_entry tid_base_stuff[] = {
 	ONE("cmdline",   S_IRUGO, proc_pid_cmdline),
 	ONE("stat",      S_IRUGO, proc_tid_stat),
 	ONE("statm",     S_IRUGO, proc_pid_statm),
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+	ONE("vmstate",     S_IRUGO, proc_pid_vmstat),
+#endif
+#endif
 	REG("maps",      S_IRUGO, proc_tid_maps_operations),
 #ifdef CONFIG_CHECKPOINT_RESTORE
 	REG("children",  S_IRUGO, proc_tid_children_operations),
@@ -3163,7 +3221,12 @@ static const struct pid_entry tid_base_stuff[] = {
 	ONE("cgroup",  S_IRUGO, proc_cgroup_show),
 #endif
 	ONE("oom_score", S_IRUGO, proc_oom_score),
+#ifdef VENDOR_EDIT
+//liangkun@Swdp.shanghai,2016/07/25 give read oom_adj permission to system process
+	REG("oom_adj",   S_IRUSR|S_IRGRP, proc_oom_adj_operations),
+#else
 	REG("oom_adj",   S_IRUSR, proc_oom_adj_operations),
+#endif
 	REG("oom_score_adj", S_IRUSR, proc_oom_score_adj_operations),
 #ifdef CONFIG_AUDITSYSCALL
 	REG("loginuid",  S_IWUSR|S_IRUGO, proc_loginuid_operations),
@@ -3173,7 +3236,11 @@ static const struct pid_entry tid_base_stuff[] = {
 	REG("make-it-fail", S_IRUGO|S_IWUSR, proc_fault_inject_operations),
 #endif
 #ifdef CONFIG_TASK_IO_ACCOUNTING
+#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/09/29 add for IO stats
+	ONE("io",	S_IRUSR | S_IRGRP | S_IROTH, proc_tid_io_accounting),
+#else
 	ONE("io",	S_IRUSR, proc_tid_io_accounting),
+#endif
 #endif
 #ifdef CONFIG_HARDWALL
 	ONE("hardwall",   S_IRUGO, proc_pid_hardwall),

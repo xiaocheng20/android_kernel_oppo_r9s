@@ -59,8 +59,14 @@
 #define VFE_CLK_INFO_MAX 16
 #define STATS_COMP_BIT_MASK 0x1FF
 
+#ifndef VENDOR_EDIT
+/* Modify by LiuBin for vfe overflow at 20160828 */
 #define MSM_ISP_MIN_AB 100000000
 #define MSM_ISP_MIN_IB 100000000
+#else
+#define MSM_ISP_MIN_AB 450000000
+#define MSM_ISP_MIN_IB 900000000
+#endif
 #define MAX_BUFFERS_IN_HW 2
 
 #define MAX_VFE 2

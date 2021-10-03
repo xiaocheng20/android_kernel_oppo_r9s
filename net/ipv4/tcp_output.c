@@ -59,7 +59,17 @@ int sysctl_tcp_limit_output_bytes __read_mostly = 262144;
  */
 int sysctl_tcp_tso_win_divisor __read_mostly = 3;
 
+#ifndef VENDOR_EDIT
+//Rongzheng.tang@Connectivity.WiFi.Network.internet.804055, 2016/07/26,
+/*
+ * modify for enabling mtu probing when an ICMP black hole detected, 
+ * help avoid the problem of MTU black holes.
+*/
 int sysctl_tcp_mtu_probing __read_mostly = 0;
+#else /* VENDOR_EDIT */
+int sysctl_tcp_mtu_probing __read_mostly = 1;
+#endif /* VENDOR_EDIT */
+
 int sysctl_tcp_base_mss __read_mostly = TCP_BASE_MSS;
 
 /* By default, RFC2861 behavior.  */

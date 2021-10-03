@@ -35,6 +35,10 @@
 #include "kgsl_sync.h"
 #include "kgsl_trace.h"
 #include "kgsl_compat.h"
+#ifdef VENDOR_EDIT
+//Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/28, Add for gpu keylog
+#include <soc/oppo/mmkey_log.h>
+#endif /* VENDOR_EDIT */
 
 /*
  * Define an kmem cache for the memobj structures since we allocate and free
@@ -133,7 +137,10 @@ static void _kgsl_cmdbatch_timer(unsigned long data)
 			break;
 		}
 	}
-
+#ifdef VENDOR_EDIT
+//Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/28, Add for gpu keylog
+    mm_keylog_write("gpu exception\n", "possible gpu syncpoint deadlock\n", TYPE_GPU_EXCEPTION);
+#endif /* VENDOR_EDIT */
 	dev_err(device->dev, "--gpu syncpoint deadlock print end--\n");
 }
 

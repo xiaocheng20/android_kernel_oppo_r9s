@@ -411,6 +411,11 @@ static rx_handler_result_t _rmnet_map_ingress_handler(struct sk_buff *skb,
 		else if (ckresult != RMNET_MAP_CHECKSUM_ERR_UNKNOWN_IP_VERSION
 			&& ckresult != RMNET_MAP_CHECKSUM_ERR_UNKNOWN_TRANSPORT
 			&& ckresult != RMNET_MAP_CHECKSUM_VALID_FLAG_NOT_SET
+//#ifdef VENDOR_EDIT
+//Tao.zhang@PSW.NW.Data.1035065, 2017/08/01
+//add for CT Private network can not play game issue(Qualcomm CR2068386)
+			&& ckresult != RMNET_MAP_CHECKSUM_VALIDATION_FAILED
+//#endif  /*VENDOR_EDIT*/
 			&& ckresult != RMNET_MAP_CHECKSUM_FRAGMENTED_PACKET) {
 			rmnet_kfree_skb(skb,
 				RMNET_STATS_SKBFREE_INGRESS_BAD_MAP_CKSUM);

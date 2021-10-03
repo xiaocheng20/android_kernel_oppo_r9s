@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +35,18 @@
 #include <linux/string_helpers.h>
 #include <linux/alarmtimer.h>
 #include <linux/qpnp/qpnp-revid.h>
+
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+#include "oppo/oppo_gauge.h"
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/13
+// add for batt type
+#include <soc/oppo/device_info.h>
+#include <soc/oppo/boot_mode.h>		// get ftm_mode
+#endif /*VENDOR_EDIT*/
 
 /* Register offsets */
 
@@ -227,6 +239,17 @@ enum fg_mem_data_index {
 	FG_DATA_MAX,
 };
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/13
+// Add for batt type
+enum OPPO_Batt_Type {
+	NON_STD_Batt = 0,
+	OPPO_SDI_Batt,
+	OPPO_LG_Batt,
+	OPPO_ATL_Batt,
+};
+#endif /*VENDOR_EDIT*/
+
 #define SETTING(_idx, _address, _offset, _value)	\
 	[FG_MEM_##_idx] = {				\
 		.address = _address,			\
@@ -234,6 +257,9 @@ enum fg_mem_data_index {
 		.value = _value,			\
 	}						\
 
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Guage, 2016/08/27  
+// Modify for avoid JEITA influence    5,10,40,45  to   -15,-10,60,65
 static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	/*       ID                    Address, Offset, Value*/
 	SETTING(SOFT_COLD,       0x454,   0,      100),
@@ -252,6 +278,27 @@ static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	SETTING(BATT_LOW,	 0x458,   0,      4200),
 	SETTING(THERM_DELAY,	 0x4AC,   3,      0),
 };
+#else
+static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
+	/*       ID                    Address, Offset, Value*/
+	SETTING(SOFT_COLD,       0x454,   0,      -150),
+	SETTING(SOFT_HOT,        0x454,   1,      800),
+	SETTING(HARD_COLD,       0x454,   2,      -200),
+	SETTING(HARD_HOT,        0x454,   3,      850),
+	SETTING(RESUME_SOC,      0x45C,   1,      0),
+	SETTING(BCL_LM_THRESHOLD, 0x47C,   2,      50),
+	SETTING(BCL_MH_THRESHOLD, 0x47C,   3,      752),
+	SETTING(TERM_CURRENT,	 0x40C,   2,      250),
+	SETTING(CHG_TERM_CURRENT, 0x4F8,   2,      250),
+	SETTING(IRQ_VOLT_EMPTY,	 0x458,   3,      2900), // default 3100, modify for low temp and soc, flash may cause empty irq lead soc jump to 0.
+	SETTING(CUTOFF_VOLTAGE,	 0x40C,   0,      3200),
+	SETTING(VBAT_EST_DIFF,	 0x000,   0,      200),	//default 30
+	SETTING(DELTA_SOC,	 0x450,   3,      1),
+	SETTING(BATT_LOW,	 0x458,   0,      4200),
+	SETTING(THERM_DELAY,	 0x4AC,   3,      0),
+};
+#endif /*VENDOR_EDIT*/
+
 
 #define DATA(_idx, _address, _offset, _length,  _value)	\
 	[FG_DATA_##_idx] = {				\
@@ -320,6 +367,26 @@ static int fg_sense_type = -EINVAL;
 static int fg_restart;
 
 static int fg_est_dump;
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate init error reason
+static int fg_init_errflag = 0;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/27
+// Add for ID recovery
+static bool fg_first_pon = true;
+static int fg_pon_time = 0;
+static bool fg_id_recovery = false;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/17
+// Add for trace abnomal batt miss irq when probe
+static bool fg_probe_success = false;
+#endif /*VENDOR_EDIT*/
 module_param_named(
 	first_est_dump, fg_est_dump, int, S_IRUSR | S_IWUSR
 );
@@ -613,7 +680,26 @@ struct fg_chip {
 	struct delayed_work	check_sanity_work;
 	struct fg_wakeup_source	sanity_wakeup_source;
 	u8			last_beat_count;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+	bool		use_qpnp_fg;
+#endif /* VENDOR_EDIT */
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/07
+// Add for Batt ID
+	bool		if_batt_authenticate;
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/13
+// Add for batt_type
+	int			oppo_batt_type;
+#endif /*VENDOR_EDIT*/
 };
+
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+static struct fg_chip *the_chip = NULL;
+#endif /* VENODR_EDIT */
 
 /* FG_MEMIF DEBUGFS structures */
 #define ADDR_LEN	4	/* 3 byte address + 1 space character */
@@ -644,6 +730,7 @@ struct fg_trans {
 	struct fg_chip *chip;
 	struct fg_log_buffer *log; /* log buffer */
 	u8 *data;	/* fg data that is read */
+	struct mutex memif_dfs_lock; /* Prevent thread concurrency */
 };
 
 struct fg_dbgfs {
@@ -2162,9 +2249,19 @@ static int get_prop_capacity(struct fg_chip *chip)
 
 	if (chip->battery_missing)
 		return MISSING_CAPACITY;
-
+#ifndef VENDOR_EDIT
+// wenbin.liu@SW.Bsp.Driver, 2016/08/16  Modify for update right soc instead of default_value 
 	if (!chip->profile_loaded && !chip->use_otp_profile)
 		return DEFAULT_CAPACITY;
+#else
+	if (!chip->profile_loaded && !chip->use_otp_profile) {
+		if(chip->use_qpnp_fg)
+			return -1;
+		else
+			return DEFAULT_CAPACITY;
+	}
+#endif /*VENDOR_EDIT*/
+		
 
 	if (chip->charge_full)
 		return FULL_CAPACITY;
@@ -2464,8 +2561,21 @@ static int update_sram_data(struct fg_chip *chip, int *resched_ms)
 
 	fg_mem_lock(chip);
 	for (i = 1; i < FG_DATA_MAX; i++) {
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/21
+// Add for batt id 
 		if (chip->profile_loaded && i >= FG_DATA_BATT_ID)
 			continue;
+#else	
+		if (chip->use_qpnp_fg) {
+			if (chip->profile_loaded && i > FG_DATA_BATT_ID)
+				continue;
+		}else {			
+			if (chip->profile_loaded && i >= FG_DATA_BATT_ID)
+				continue;
+		}	
+#endif /*VENDOR_EDIT*/
+
 		rc = fg_mem_read(chip, reg, fg_data[i].address,
 			fg_data[i].len, fg_data[i].offset, 0);
 		if (rc) {
@@ -2576,6 +2686,13 @@ static void check_sanity_work(struct work_struct *work)
 	int rc = 0;
 	u8 beat_count;
 	bool tried_once = false;
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/17
+// Add for locate fg profile error
+	if(chip->use_qpnp_fg)
+		fg_init_errflag |= BIT(31);
+#endif /*VENDOR_EDIT*/
 
 	fg_stay_awake(&chip->sanity_wakeup_source);
 
@@ -2778,12 +2895,20 @@ static void update_jeita_setting(struct work_struct *work)
 	int i, rc;
 
 	for (i = 0; i < 4; i++)
-		reg[i] = (settings[FG_MEM_SOFT_COLD + i].value / 10) + 30;
-
+		{
+			reg[i] = (settings[FG_MEM_SOFT_COLD + i].value / 10) + 30;
+			pr_err("Value = %d  ## Reg = %d\n",settings[FG_MEM_SOFT_COLD + i].value,reg[i]);
+		}
 	rc = fg_mem_write(chip, reg, settings[FG_MEM_SOFT_COLD].address,
 			4, settings[FG_MEM_SOFT_COLD].offset, 0);
 	if (rc)
 		pr_err("failed to update JEITA setting rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/21
+// Add for debug
+	else
+		pr_err("Success to update JEITA setting rc=%d\n", rc);
+#endif /*VENDOR_EDIT*/
 }
 
 static int fg_set_resume_soc(struct fg_chip *chip, u8 threshold)
@@ -3991,19 +4116,36 @@ static bool is_charger_available(struct fg_chip *chip)
 	return true;
 }
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/15 add for qpnp-fg
+extern int qpnp_fg_set_charge_enble(bool enable);
+#endif /* VENDOR_EDIT */
+
 static int set_prop_enable_charging(struct fg_chip *chip, bool enable)
 {
 	int rc = 0;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/15 add for qpnp-fg
 	union power_supply_propval ret = {enable, };
-
+#endif /* VENDOR_EDIT */
+	
 	if (!is_charger_available(chip)) {
 		pr_err("Charger not available yet!\n");
 		return -EINVAL;
 	}
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/15 add for qpnp-fg
 	rc = chip->batt_psy->set_property(chip->batt_psy,
 			POWER_SUPPLY_PROP_BATTERY_CHARGING_ENABLED,
 			&ret);
+#else
+	if(chip->use_qpnp_fg == false) {
+		return -EINVAL;
+	}
+	rc = qpnp_fg_set_charge_enble(enable);
+#endif /* VENDOR_EDIT */
+
 	if (rc) {
 		pr_err("couldn't configure batt chg %d\n", rc);
 		return rc;
@@ -4012,6 +4154,10 @@ static int set_prop_enable_charging(struct fg_chip *chip, bool enable)
 	chip->charging_disabled = !enable;
 	if (fg_debug_mask & FG_STATUS)
 		pr_info("%sabling charging\n", enable ? "en" : "dis");
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.GAUGE	2016/09/08 add for gauge debug
+	pr_info("%sabling charging\n", enable ? "en" : "dis");
+#endif /* VENDOR_EDIT */
 
 	return rc;
 }
@@ -4866,6 +5012,25 @@ static irqreturn_t fg_batt_missing_irq_handler(int irq, void *_chip)
 	struct fg_chip *chip = _chip;
 	bool batt_missing = is_battery_missing(chip);
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/17
+// Add for trace abnomal batt miss irq    only for 16061
+	if(chip->use_qpnp_fg) {
+		if(fg_probe_success) {
+			if(batt_missing)
+				fg_init_errflag |= BIT(26);
+			else
+				fg_init_errflag |= BIT(27);
+		} else {
+			if(batt_missing)
+				fg_init_errflag |= BIT(28);
+			else
+				fg_init_errflag |= BIT(29);
+			return IRQ_HANDLED;			// if  batt miss int produce ,when fg probe , return
+		}		
+	}
+#endif /*VENDOR_EDIT*/
+
 	if (batt_missing) {
 		fg_cap_learning_stop(chip);
 		chip->battery_missing = true;
@@ -5020,9 +5185,16 @@ static irqreturn_t fg_empty_soc_irq_handler(int irq, void *_chip)
 				INT_RT_STS(chip->soc_base), rc);
 		goto done;
 	}
-
+	
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/07
+// Add for trace empty soc IRQ
 	if (fg_debug_mask & FG_IRQS)
 		pr_info("triggered 0x%x\n", soc_rt_sts);
+#else
+	pr_err("triggered 0x%x\n", soc_rt_sts);
+#endif /*VENDOR_EDIT*/
+
 	if (fg_is_batt_empty(chip)) {
 		fg_stay_awake(&chip->empty_check_wakeup_source);
 		schedule_delayed_work(&chip->check_empty_work,
@@ -5039,8 +5211,16 @@ static irqreturn_t fg_first_soc_irq_handler(int irq, void *_chip)
 {
 	struct fg_chip *chip = _chip;
 
+
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/21
+// Add for debug
 	if (fg_debug_mask & FG_IRQS)
 		pr_info("triggered\n");
+#else
+	if(chip->use_qpnp_fg)
+		pr_err("triggered\n");
+#endif /*VENDOR_EDIT*/
 
 	if (fg_est_dump)
 		schedule_work(&chip->dump_sram);
@@ -5686,7 +5866,13 @@ static int fg_do_restart(struct fg_chip *chip, bool write_profile)
 		pr_info("restarting fuel gauge...\n");
 
 try_again:
+
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/09 add for soc accuracy
 	if (write_profile && !chip->ima_error_handling) {
+#else
+	if (write_profile && !chip->ima_error_handling && chip->use_qpnp_fg == false) {
+#endif /* VENDOR_EDIT */
 		if (!chip->charging_disabled) {
 			pr_err("Charging not yet disabled!\n");
 			return -EINVAL;
@@ -5711,6 +5897,13 @@ try_again:
 			}
 		}
 	}
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/09 add for soc accuracy
+	if(chip->use_qpnp_fg) {
+		ibat_ua = get_sram_prop_now(chip, FG_DATA_CURRENT);
+		pr_err("%s ibat_ua:%d\n", __func__, ibat_ua);
+	}
+#endif /* VENDOR_EDIT */
 
 	chip->fg_restarting = true;
 	/*
@@ -5739,6 +5932,12 @@ try_again:
 			NO_OTP_PROF_RELOAD, 0, 1);
 	if (rc) {
 		pr_err("failed to set no otp reload bit\n");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(9);
+#endif /*VENDOR_EDIT*/		
 		goto unlock_and_fail;
 	}
 
@@ -5748,6 +5947,12 @@ try_again:
 			reg, 0, 1);
 	if (rc) {
 		pr_err("failed to unset fg restart: %d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(10);
+#endif /*VENDOR_EDIT*/				
 		goto unlock_and_fail;
 	}
 
@@ -5755,6 +5960,12 @@ try_again:
 			LOW_LATENCY, LOW_LATENCY, 1);
 	if (rc) {
 		pr_err("failed to set low latency access bit\n");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(11);
+#endif /*VENDOR_EDIT*/				
 		goto unlock_and_fail;
 	}
 	mutex_unlock(&chip->rw_lock);
@@ -5763,6 +5974,12 @@ try_again:
 	rc = fg_mem_read(chip, &reg, PROFILE_INTEGRITY_REG, 1, 0, 0);
 	if (rc) {
 		pr_err("failed to read profile integrity rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(12);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 
@@ -5778,6 +5995,12 @@ try_again:
 	rc = fg_masked_write(chip, MEM_INTF_CFG(chip), LOW_LATENCY, 0, 1);
 	if (rc) {
 		pr_err("failed to set low latency access bit\n");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(13);
+#endif /*VENDOR_EDIT*/				
 		goto unlock_and_fail;
 	}
 
@@ -5790,6 +6013,12 @@ try_again:
 				chip->batt_profile_len, 0, 1);
 		if (rc) {
 			pr_err("failed to write profile rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+			if(chip->use_qpnp_fg)
+				fg_init_errflag |= BIT(14);
+#endif /*VENDOR_EDIT*/					
 			goto sub_and_fail;
 		}
 		/* write the integrity bits and release access */
@@ -5798,6 +6027,12 @@ try_again:
 				PROFILE_INTEGRITY_BIT, 0);
 		if (rc) {
 			pr_err("failed to write profile rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+			if(chip->use_qpnp_fg)
+				fg_init_errflag |= BIT(15);
+#endif /*VENDOR_EDIT*/					
 			goto sub_and_fail;
 		}
 	}
@@ -5814,6 +6049,12 @@ try_again:
 	if (rc <= 0) {
 		pr_err("transaction timed out rc=%d\n", rc);
 		rc = -ETIMEDOUT;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(16);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 
@@ -5836,6 +6077,12 @@ try_again:
 			NO_OTP_PROF_RELOAD, NO_OTP_PROF_RELOAD, 1);
 	if (rc) {
 		pr_err("failed to set no otp reload bit\n");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(17);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 
@@ -5844,6 +6091,12 @@ try_again:
 			reg, reg, 1);
 	if (rc) {
 		pr_err("failed to set fg restart: %d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(18);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 
@@ -5853,12 +6106,29 @@ try_again:
 	if (rc <= 0) {
 		pr_err("transaction timed out rc=%d\n", rc);
 		rc = -ETIMEDOUT;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg) {
+			fg_init_errflag |= BIT(19);
+			/* unset the restart bits so the fg doesn't continuously restart */
+			reg = REDO_FIRST_ESTIMATE | RESTART_GO;
+			fg_masked_write(chip, chip->soc_base + SOC_RESTART,
+				reg, 0, 1);
+		}
+#endif /*VENDOR_EDIT*/
 		goto fail;
 	}
 	rc = fg_read(chip, &reg, INT_RT_STS(chip->soc_base), 1);
 	if (rc) {
 		pr_err("spmi read failed: addr=%03X, rc=%d\n",
 				INT_RT_STS(chip->soc_base), rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(20);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 	if ((reg & FIRST_EST_DONE_BIT) == 0)
@@ -5868,6 +6138,12 @@ try_again:
 			NO_OTP_PROF_RELOAD, 0, 1);
 	if (rc) {
 		pr_err("failed to set no otp reload bit\n");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(21);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 	/* unset the restart bits so the fg doesn't continuously restart */
@@ -5876,6 +6152,12 @@ try_again:
 			reg, 0, 1);
 	if (rc) {
 		pr_err("failed to unset fg restart: %d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(22);
+#endif /*VENDOR_EDIT*/				
 		goto fail;
 	}
 
@@ -5890,6 +6172,12 @@ try_again:
 				fg_data[FG_DATA_BATT_TEMP].offset, 0);
 		if (rc) {
 			pr_err("failed to write batt temp rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+			if(chip->use_qpnp_fg)
+				fg_init_errflag |= BIT(23);
+#endif /*VENDOR_EDIT*/					
 			goto fail;
 		}
 	}
@@ -5920,6 +6208,11 @@ fail:
 	return -EINVAL;
 }
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/29
+// Add for ID recovery
+static void redetect_batt_id(struct fg_chip *chip);
+#endif /*VENDOR_EDIT*/
 #define FG_PROFILE_LEN			128
 #define PROFILE_COMPARE_LEN		32
 #define THERMAL_COEFF_ADDR		0x444
@@ -5934,6 +6227,28 @@ static int fg_batt_profile_init(struct fg_chip *chip)
 	const char *data, *batt_type_str;
 	bool tried_again = false, vbat_in_range, profiles_same;
 	u8 reg = 0;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/09
+// Add for non_std batt detection
+	const char * oppo_battery_type = NULL;
+	const char * nonstd_batt_type = "oppo_batt_nonstd_2820mah";
+	const char * batt_sdi = "oppo_batt_sdi_2820mah";
+	const char * batt_lg = "oppo_batt_lg_2820mah";
+	const char * batt_atl = "oppo_batt_atl_2820mah";
+	int vbatt_diff = 0;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/19
+// Add for FTM accuracy
+	int fg_boot_mode = get_boot_mode();
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/28
+// Add for batt_ID recovery
+	int unused = 0;
+#endif /*VENDOR_EDIT*/
 
 wait:
 	fg_stay_awake(&chip->profile_wakeup_source);
@@ -5947,6 +6262,12 @@ wait:
 	} else if (ret <= 0) {
 		rc = -ETIMEDOUT;
 		pr_err("profile loading timed out rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(0);
+#endif /*VENDOR_EDIT*/
 		goto no_profile;
 	}
 
@@ -5954,23 +6275,98 @@ wait:
 	if (!batt_node) {
 		pr_warn("No available batterydata, using OTP defaults\n");
 		rc = 0;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(1);
+#endif /*VENDOR_EDIT*/
 		goto no_profile;
 	}
-
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/08/25
+// modify for show battery id
 	if (fg_debug_mask & FG_STATUS)
 		pr_info("battery id = %d\n",
 				get_sram_prop_now(chip, FG_DATA_BATT_ID));
+#else
+	pr_err(" battery id = %d\n",
+		get_sram_prop_now(chip, FG_DATA_BATT_ID));
+#endif /*VENDOR_EDIT*/
 	profile_node = of_batterydata_get_best_profile(batt_node, "bms",
 							fg_batt_type);
+
 	if (IS_ERR_OR_NULL(profile_node)) {
 		rc = PTR_ERR(profile_node);
 		if (rc == -EPROBE_DEFER) {
 			goto reschedule;
 		} else {
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/09
+// Add for non_std batt detection
+			if(chip->use_qpnp_fg) {
+				profile_node = of_find_node_by_name(batt_node, "qcom,oppo_batt_nonstd_2820mah");					
+				if(!profile_node) {
+					pr_err("couldn't find profile handle rc=%d\n", rc);
+					fg_init_errflag |= BIT(2);				
+					goto no_profile;
+				}
+				chip->if_batt_authenticate = false;	
+				pr_err("Non_Standard Battery : oppo_batt_nonstd_2820mah found\n");
+				chip->oppo_batt_type = NON_STD_Batt;
+			}
+			else{
+				pr_err("couldn't find profile handle rc=%d\n", rc);
+				goto no_profile;
+			}
+#else
 			pr_err("couldn't find profile handle rc=%d\n", rc);
 			goto no_profile;
+#endif /*VENDOR_EDIT*/
 		}
 	}
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/09 
+// Add for non_std batt detection 
+	else {
+		if(chip->use_qpnp_fg) {
+			rc = of_property_read_string(profile_node, "qcom,battery-type",&oppo_battery_type);
+			rc = strcmp(nonstd_batt_type,oppo_battery_type);
+			if(!rc) {
+				chip->if_batt_authenticate = false;
+				pr_err("Non_Standard Battery : oppo_batt_nonstd_2820mah found\n");
+				chip->oppo_batt_type = NON_STD_Batt;
+			} else {
+				chip->if_batt_authenticate = true;
+				rc = of_property_read_string(profile_node, "qcom,battery-type",&oppo_battery_type);
+				if(!strcmp(batt_sdi,oppo_battery_type))
+					chip->oppo_batt_type = OPPO_SDI_Batt;
+				else if(!strcmp(batt_lg,oppo_battery_type))
+					chip->oppo_batt_type = OPPO_LG_Batt;
+				else if(!strcmp(batt_atl,oppo_battery_type))
+					chip->oppo_batt_type = OPPO_ATL_Batt;
+				else
+					pr_err("Battery Type Unknow\n");
+			}	
+		}		
+	}
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/28
+// Add for batt_ID recovery
+	if (chip->use_qpnp_fg && (fg_boot_mode == MSM_BOOT_MODE__NORMAL)) {
+		if (fg_first_pon && !chip->if_batt_authenticate) {
+			fg_first_pon = false;
+			fg_id_recovery = true;
+			redetect_batt_id(chip);
+			msleep(100);
+			update_sram_data(chip, &unused);
+			msleep(5000);
+			goto wait;
+		}
+	}
+#endif /*VENDOR_EDIT*/
 
 	/* read rslow compensation values if they're available */
 	rc = of_property_read_u32(profile_node, "qcom,chg-rs-to-rslow",
@@ -6023,12 +6419,24 @@ wait:
 	if (!data) {
 		pr_err("no battery profile loaded\n");
 		rc = 0;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(3);
+#endif /*VENDOR_EDIT*/
 		goto no_profile;
 	}
 
 	if (len != FG_PROFILE_LEN) {
 		pr_err("battery profile incorrect size: %d\n", len);
 		rc = -EINVAL;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(4);
+#endif /*VENDOR_EDIT*/		
 		goto no_profile;
 	}
 
@@ -6037,6 +6445,12 @@ wait:
 	if (rc) {
 		pr_err("Could not find battery data type: %d\n", rc);
 		rc = 0;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(5);
+#endif /*VENDOR_EDIT*/		
 		goto no_profile;
 	}
 
@@ -6047,12 +6461,24 @@ wait:
 	if (!chip->batt_profile) {
 		pr_err("out of memory\n");
 		rc = -ENOMEM;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(6);
+#endif /*VENDOR_EDIT*/		
 		goto no_profile;
 	}
 
 	rc = fg_mem_read(chip, &reg, PROFILE_INTEGRITY_REG, 1, 0, 1);
 	if (rc) {
 		pr_err("failed to read profile integrity rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(7);
+#endif /*VENDOR_EDIT*/		
 		goto no_profile;
 	}
 
@@ -6060,13 +6486,25 @@ wait:
 			len, 0, 1);
 	if (rc) {
 		pr_err("failed to read profile rc=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(8);
+#endif /*VENDOR_EDIT*/		
 		goto no_profile;
 	}
 
 	/* Check whether the charger is ready */
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/09 add modify for soc accuracy
 	if (!is_charger_available(chip))
 		goto reschedule;
+#endif /* VENDOR_EDIT */
 
+
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/15 modify for use bq27541 gauge
 	/* Disable charging for a FG cycle before calculating vbat_in_range */
 	if (!chip->charging_disabled) {
 		rc = set_prop_enable_charging(chip, false);
@@ -6075,22 +6513,44 @@ wait:
 
 		goto reschedule;
 	}
+#endif /* VENDOR_EDIT */
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/09/12 modify for vbatt_diff print
 	vbat_in_range = get_vbat_est_diff(chip)
 			< settings[FG_MEM_VBAT_EST_DIFF].value * 1000;
+#else
+	vbatt_diff = get_vbat_est_diff(chip);
+	vbat_in_range = vbatt_diff
+			< settings[FG_MEM_VBAT_EST_DIFF].value * 1000;
+#endif /* VENDOR_EDIT */
 	profiles_same = memcmp(chip->batt_profile, data,
 					PROFILE_COMPARE_LEN) == 0;
 	if (reg & PROFILE_INTEGRITY_BIT) {
 		fg_cap_learning_load_data(chip);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.GAUGE 2016/09/08 modify for gauge debug
+		pr_err("vbat_in_range:%d, vbatt_diff:%d\n", vbat_in_range, vbatt_diff);
+#endif /* VENDOR_EDIT */
 		if (vbat_in_range && !fg_is_batt_empty(chip) && profiles_same) {
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.GAUGE 2016/09/08 modify for gauge debug
 			if (fg_debug_mask & FG_STATUS)
 				pr_info("Battery profiles same, using default\n");
+#else
+			pr_info("Battery profiles same, using default\n");
+#endif /* VENDOR_EDIT */
 			if (fg_est_dump)
 				schedule_work(&chip->dump_sram);
 			goto done;
 		}
 	} else {
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.GAUGE 2016/09/08 modify for gauge debug
 		pr_info("Battery profile not same, clearing data\n");
+#else
+		pr_info("Battery profile not same, clearing data, INTEGRITY_REG = 0x%x\n", reg);
+#endif /* VENDOR_EDIT */
 		clear_cycle_counter(chip);
 		chip->learning_data.learned_cc_uah = 0;
 	}
@@ -6127,10 +6587,29 @@ wait:
 		print_hex_dump(KERN_INFO, "FG: new profile: ",
 				DUMP_PREFIX_NONE, 16, 1, chip->batt_profile,
 				chip->batt_profile_len, false);
-
+	
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/19
+// Add for FTM accuracy
 	rc = fg_do_restart(chip, true);
+#else
+	if (chip->use_qpnp_fg) {	// only for 16061
+		if (fg_boot_mode == MSM_BOOT_MODE__FACTORY)	// FTM not do restart to accuracy boot time
+			rc = 0;
+		else
+			rc = fg_do_restart(chip, true);
+	} else 
+		rc = fg_do_restart(chip, true);
+#endif /*VENDOR_EDIT*/
+	
 	if (rc) {
 		pr_err("restart failed: %d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(24);
+#endif /*VENDOR_EDIT*/				
 		goto no_profile;
 	}
 
@@ -6194,6 +6673,12 @@ done:
 	rc = populate_system_data(chip);
 	if (rc) {
 		pr_err("failed to read ocv properties=%d\n", rc);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/07
+// Add for locate fg init error reason only for 16061
+		if(chip->use_qpnp_fg)
+			fg_init_errflag |= BIT(25);
+#endif /*VENDOR_EDIT*/				
 		return rc;
 	}
 	estimate_battery_age(chip, &chip->actual_cap_uah);
@@ -6206,6 +6691,10 @@ done:
 	complete_all(&chip->fg_reset_done);
 	return rc;
 no_profile:
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/08 modify for iterm is not accurate
+	update_chg_iterm(chip);
+#endif /* VENDOR_EDIT */
 	if (chip->charging_disabled) {
 		rc = set_prop_enable_charging(chip, true);
 		if (rc)
@@ -6821,6 +7310,11 @@ static int fg_of_init(struct fg_chip *chip)
 
 	if (fg_debug_mask & FG_STATUS)
 		pr_info("cc-soc-limit-pct: %d\n", chip->cc_soc_limit_pct);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+	chip->use_qpnp_fg = of_property_read_bool(chip->spmi->dev.of_node,
+				"qcom,use-qpnp-fg");
+#endif /* VENDOR_EDIT */
 
 	return rc;
 }
@@ -7178,6 +7672,7 @@ static int fg_memif_data_open(struct inode *inode, struct file *file)
 	trans->addr = dbgfs_data.addr;
 	trans->chip = dbgfs_data.chip;
 	trans->offset = trans->addr;
+	mutex_init(&trans->memif_dfs_lock);
 
 	file->private_data = trans;
 	return 0;
@@ -7189,6 +7684,7 @@ static int fg_memif_dfs_close(struct inode *inode, struct file *file)
 
 	if (trans && trans->log && trans->data) {
 		file->private_data = NULL;
+		mutex_destroy(&trans->memif_dfs_lock);
 		kfree(trans->log);
 		kfree(trans->data);
 		kfree(trans);
@@ -7346,10 +7842,13 @@ static ssize_t fg_memif_dfs_reg_read(struct file *file, char __user *buf,
 	size_t ret;
 	size_t len;
 
+	mutex_lock(&trans->memif_dfs_lock);
 	/* Is the the log buffer empty */
 	if (log->rpos >= log->wpos) {
-		if (get_log_data(trans) <= 0)
-			return 0;
+		if (get_log_data(trans) <= 0) {
+			len = 0;
+			goto unlock_mutex;
+		}
 	}
 
 	len = min(count, log->wpos - log->rpos);
@@ -7357,7 +7856,8 @@ static ssize_t fg_memif_dfs_reg_read(struct file *file, char __user *buf,
 	ret = copy_to_user(buf, &log->data[log->rpos], len);
 	if (ret == len) {
 		pr_err("error copy sram register values to user\n");
-		return -EFAULT;
+		len = -EFAULT;
+		goto unlock_mutex;
 	}
 
 	/* 'ret' is the number of bytes not copied */
@@ -7365,6 +7865,9 @@ static ssize_t fg_memif_dfs_reg_read(struct file *file, char __user *buf,
 
 	*ppos += len;
 	log->rpos += len;
+
+unlock_mutex:
+	mutex_unlock(&trans->memif_dfs_lock);
 	return len;
 }
 
@@ -7385,14 +7888,20 @@ static ssize_t fg_memif_dfs_reg_write(struct file *file, const char __user *buf,
 	int cnt = 0;
 	u8  *values;
 	size_t ret = 0;
+	char *kbuf;
+	u32 offset;
 
 	struct fg_trans *trans = file->private_data;
-	u32 offset = trans->offset;
+
+	mutex_lock(&trans->memif_dfs_lock);
+	offset = trans->offset;
 
 	/* Make a copy of the user data */
-	char *kbuf = kmalloc(count + 1, GFP_KERNEL);
-	if (!kbuf)
-		return -ENOMEM;
+	kbuf = kmalloc(count + 1, GFP_KERNEL);
+	if (!kbuf) {
+		ret = -ENOMEM;
+		goto unlock_mutex;
+	}
 
 	ret = copy_from_user(kbuf, buf, count);
 	if (ret == count) {
@@ -7431,6 +7940,8 @@ static ssize_t fg_memif_dfs_reg_write(struct file *file, const char __user *buf,
 
 free_buf:
 	kfree(kbuf);
+unlock_mutex:
+	mutex_unlock(&trans->memif_dfs_lock);
 	return ret;
 }
 
@@ -7971,6 +8482,13 @@ static void ima_error_recovery_work(struct work_struct *work)
 	bool tried_again = false;
 	int rc;
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/17
+// Add for locate fg profile error
+	if(chip->use_qpnp_fg)
+		fg_init_errflag |= BIT(30);
+#endif /*VENDOR_EDIT*/
+
 	fg_stay_awake(&chip->fg_reset_wakeup_source);
 	mutex_lock(&chip->ima_recovery_lock);
 	if (!chip->ima_error_handling) {
@@ -8203,6 +8721,11 @@ static int fg_detect_pmic_type(struct fg_chip *chip)
 	return 0;
 }
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/10/14
+// Add for batt id log
+#define FG_BATT_SYS 0x07
+#endif /*VENDOR_EDIT*/
 #define INIT_JEITA_DELAY_MS 1000
 static void delayed_init_work(struct work_struct *work)
 {
@@ -8210,6 +8733,11 @@ static void delayed_init_work(struct work_struct *work)
 	struct fg_chip *chip = container_of(work,
 				struct fg_chip,
 				init_work);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/10/14
+// Add for batt id log
+	u8 reg_value = 0;
+#endif /*VENDOR_EDIT*/
 
 	/* hold memory access until initialization finishes */
 	fg_mem_lock(chip);
@@ -8242,8 +8770,21 @@ static void delayed_init_work(struct work_struct *work)
 	if (chip->last_temp_update_time == 0)
 		update_temp_data(&chip->update_temp_work.work);
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/09 add for soc accuracy
 	if (!chip->use_otp_profile)
 		schedule_delayed_work(&chip->batt_profile_init, 0);
+#else
+	if(chip->use_qpnp_fg == false) {
+		if (!chip->use_otp_profile)
+			schedule_delayed_work(&chip->batt_profile_init, 0);
+	} else {
+		rc = fg_read(chip, &reg_value, (chip->batt_base + FG_BATT_SYS), 1);
+		pr_err("[oppo_batt_id] FG_BATT_SYS = 0x%02x\n",reg_value);
+		if (!chip->use_otp_profile)
+			batt_profile_init(&chip->batt_profile_init.work);
+	}
+#endif /* VENDOR_EDIT */
 
 	if (chip->ima_supported && fg_reset_on_lockup)
 		schedule_delayed_work(&chip->check_sanity_work,
@@ -8264,6 +8805,178 @@ done:
 	fg_cleanup(chip);
 }
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/09/13
+// Add for battery type
+static void register_battery_devinfo(struct fg_chip *di)
+{
+	int ret = 0;
+	char *version;
+	char *manufacture;
+
+	switch (di->oppo_batt_type) {
+		case NON_STD_Batt:
+			version = "4.40V";
+			manufacture = "Non_Std";
+			break;
+		case OPPO_SDI_Batt:
+			version = "4.40V";
+			manufacture = "SDI";
+			break;
+		case OPPO_LG_Batt:
+			version = "4.40V";
+			manufacture = "LG";
+			break;	
+		case OPPO_ATL_Batt:
+			version = "4.40V";
+			manufacture = "ATL";
+			break;				
+		default:
+			version = "unknown";
+			manufacture = "UNKNOWN";
+			break;
+	}
+
+	ret = register_device_proc("battery", version, manufacture);
+	if (ret)
+		pr_err("register_battery_devinfo fail\n");
+}
+#endif /*VENDOR_EDIT*/
+
+
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+static int qpnp_fg_get_battery_mvolts(void)
+{
+	int batt_vol = 0;
+	int fg_boot_mode = get_boot_mode();
+	
+	if(!the_chip)
+		return 3800;
+	batt_vol = get_sram_prop_now(the_chip, FG_DATA_VOLTAGE);
+	
+	if(fg_boot_mode == MSM_BOOT_MODE__FACTORY) 		
+		batt_vol+=30000;
+	
+	return batt_vol;
+}
+
+static int qpnp_fg_get_battery_temperature(void)
+{
+	int batt_temp = 0;
+	
+	if(!the_chip)
+		return 400;
+	batt_temp = get_sram_prop_now(the_chip, FG_DATA_BATT_TEMP);
+	
+	return batt_temp;
+}
+
+static int qpnp_fg_get_batt_remaining_capacity(void)
+{
+	return -1;		// if not supported , default value is -1
+}
+
+#define SOC_RECOVER_COUNT  12    // check every minute when soc update -1
+#define FG_PON_TIME_COUNT  48	 // 4 min later auth = 1
+static int qpnp_fg_get_battery_soc(void)
+{
+	int soc = 0;
+	int fg_boot_mode = get_boot_mode();
+	static bool soc_recovery = false;
+	static int recovery_count = 0;
+
+	if(!the_chip)
+		return 50;
+
+	if(fg_pon_time <= FG_PON_TIME_COUNT)
+		fg_pon_time++;
+
+	soc = get_prop_capacity(the_chip);
+	if(soc == -1) {	// for help locate fg init error  add 16/11/07    Error_Flag: 0~25 for profile init        26~29 for batt miss irq   30~31 for ima recovery
+		pr_err("[FG_init_err] Error Flag = 0x%08x\n",fg_init_errflag);
+		if(fg_boot_mode == MSM_BOOT_MODE__NORMAL) {	// only for normal mode
+			if (!soc_recovery) {
+				soc_recovery = true;
+				fg_reset_on_lockup = true;
+				pr_err("[FG_init_err] SOC_Recovery Call\n");
+				fg_check_ima_error_handling(the_chip);
+			}
+			recovery_count++;
+			if (recovery_count >= SOC_RECOVER_COUNT) {	// if not recovery, retry after 1 minutes
+				recovery_count = 0;
+				soc_recovery = false;
+			}
+			pr_err("[FG_init_err] Retry Count = %d\n",recovery_count);
+		}
+	}
+	if(fg_reset_on_lockup || fg_id_recovery)	// add for locate error reason
+		pr_err("[FG_init_err] fg_reset_on_lockup = %d, fg_id_recovery = %d\n",fg_reset_on_lockup,fg_id_recovery);
+
+	return soc;
+}
+
+static int qpnp_fg_get_average_current(void)
+{
+	int chg_current = 0;
+	
+	if(!the_chip)
+		return 0;
+	
+	chg_current = get_sram_prop_now(the_chip, FG_DATA_CURRENT) / 1000;
+	
+	return chg_current;
+}
+
+static int qpnp_fg_get_battery_fcc(void)
+{
+	return -1;		// if not supported , default value is -1
+}
+
+static int qpnp_fg_get_battery_cc(void)
+{
+	return -1;		// if not supported , default value is -1
+}
+
+static int qpnp_fg_get_battery_soh(void)
+{
+	return -1;		// if not supported , default value is -1
+}
+
+static bool qpnp_fg_get_battery_authenticate(void)
+{
+	int fg_boot_mode = get_boot_mode();
+	if(!the_chip)
+		return false;
+
+	if(fg_boot_mode == MSM_BOOT_MODE__NORMAL) {
+		if(fg_pon_time >= FG_PON_TIME_COUNT)	// after pon_time , return auth true
+			return true;
+		else
+			return the_chip->if_batt_authenticate;
+	} else
+		return the_chip->if_batt_authenticate;	// if not normal mode  use real auth
+}
+
+static void qpnp_fg_set_battery_full(bool enable)
+{
+	
+}
+
+static struct oppo_gauge_operations qpnp_fg_gauge = {
+	.get_battery_mvolts		= qpnp_fg_get_battery_mvolts,
+	.get_battery_temperature	= qpnp_fg_get_battery_temperature,
+	.get_batt_remaining_capacity = qpnp_fg_get_batt_remaining_capacity,
+	.get_battery_soc			= qpnp_fg_get_battery_soc,
+	.get_average_current		= qpnp_fg_get_average_current,
+	.get_battery_fcc			= qpnp_fg_get_battery_fcc,
+	.get_battery_cc			= qpnp_fg_get_battery_cc,
+	.get_battery_soh			= qpnp_fg_get_battery_soh,
+	.get_battery_authenticate	= qpnp_fg_get_battery_authenticate,
+	.set_battery_full			= qpnp_fg_set_battery_full,
+};
+#endif /* VENDOR_EDIT */
+
 static int fg_probe(struct spmi_device *spmi)
 {
 	struct device *dev = &(spmi->dev);
@@ -8272,6 +8985,10 @@ static int fg_probe(struct spmi_device *spmi)
 	struct resource *resource;
 	u8 subtype, reg;
 	int rc = 0;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+	struct oppo_gauge_chip *the_oppo_gauge_chip = NULL;
+#endif /* VENODR_EDIT */
 
 	if (!spmi) {
 		pr_err("no valid spmi pointer\n");
@@ -8291,6 +9008,7 @@ static int fg_probe(struct spmi_device *spmi)
 
 	chip->spmi = spmi;
 	chip->dev = &(spmi->dev);
+	
 
 	wakeup_source_init(&chip->empty_check_wakeup_source.source,
 			"qpnp_fg_empty_check");
@@ -8494,12 +9212,55 @@ static int fg_probe(struct spmi_device *spmi)
 
 	/* Fake temperature till the actual temperature is read */
 	chip->last_good_temp = 250;
+	
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/12
+// Add for Non std batt detect
+	if(chip->use_qpnp_fg)
+		chip->if_batt_authenticate = false;
+#endif /*VENDOR_EDIT*/
+	
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/09 modify for soc accuracy
 	schedule_work(&chip->init_work);
+#else
+	if(chip->use_qpnp_fg == false) {
+		schedule_work(&chip->init_work);
+	} else {
+		delayed_init_work(&chip->init_work);
+	}
+#endif	/* VENDOR_EDIT */
 
-	pr_info("FG Probe success - FG Revision DIG:%d.%d ANA:%d.%d PMIC subtype=%d\n",
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/12 modify for 16061 qpnp-fg
+	the_chip = chip;
+	if(chip->use_qpnp_fg) {
+		the_oppo_gauge_chip = devm_kzalloc(chip->dev,
+			sizeof(struct oppo_gauge_chip), GFP_KERNEL);
+		if (!the_oppo_gauge_chip) {
+			pr_err("kzalloc() failed.\n");
+			the_chip = NULL;
+			return -ENOMEM;
+		} else {
+			fg_sram_update_period_ms = 5000;
+			the_oppo_gauge_chip->dev = chip->dev;
+			the_oppo_gauge_chip->gauge_ops = &qpnp_fg_gauge;
+			oppo_gauge_init(the_oppo_gauge_chip);
+			register_battery_devinfo(chip);
+		}
+	}
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/11/17
+// Add for tracing abnomal batt missing irq when probe
+	fg_probe_success = true;
+#endif /*VENDOR_EDIT*/
+
+	pr_info("FG Probe success - FG Revision DIG:%d.%d ANA:%d.%d PMIC subtype=%d,use_qpnp_fg=%d\n",
 		chip->revision[DIG_MAJOR], chip->revision[DIG_MINOR],
 		chip->revision[ANA_MAJOR], chip->revision[ANA_MINOR],
-		chip->pmic_subtype);
+		chip->pmic_subtype, chip->use_qpnp_fg);
 
 	return rc;
 
@@ -8612,14 +9373,89 @@ static void fg_check_ima_idle(struct fg_chip *chip)
 	mutex_unlock(&chip->rw_lock);
 }
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/14
+// Add for solve some situation cause batt id abnormal
+#define REDO_BATID_DURING_FIRST_EST		0x10
+#define FG_BATT_SW_BATT_ID		0x4150
+#define FORCE_BATID_TRUE		BIT(7)
+static void redetect_batt_id(struct fg_chip *chip) 
+{
+	u8 reg = 0; 
+	int rc = 0; 
+	pr_err("[oppo_batt_id]: %s \n",__func__);
+
+	chip->fg_restarting = true;
+	
+	rc = fg_masked_write(chip, chip->soc_base + SOC_BOOT_MOD, NO_OTP_PROF_RELOAD, 0, 1);
+	if (rc) {
+		pr_err("failed to set no otp reload bit\n");
+		goto reg_write_err;
+	}
+	usleep_range(5000,6000);
+	
+	reg = FORCE_BATID_TRUE;
+	rc = fg_masked_write(chip, FG_BATT_SW_BATT_ID, reg, reg, 1); // set 0x80 to 0x4150 
+	if(rc)
+		goto reg_write_err;
+	usleep_range(5000,6000); 
+	
+	rc = fg_masked_write(chip, chip->soc_base + SOC_RESTART, 0xFF, 0, 1); //clear 0x4051 
+	if(rc)
+		goto reg_write_err;
+	usleep_range(5000,6000); 
+	
+	reg = REDO_BATID_DURING_FIRST_EST |REDO_FIRST_ESTIMATE; 
+	rc = fg_masked_write(chip, chip->soc_base + SOC_RESTART, reg, reg, 1); //set 0x18 to 0x4051 
+	if(rc)
+		goto reg_write_err;
+	usleep_range(5000,6000); 
+	
+	reg = REDO_BATID_DURING_FIRST_EST |REDO_FIRST_ESTIMATE| RESTART_GO; 
+	rc = fg_masked_write(chip, chip->soc_base + SOC_RESTART, reg, reg, 1); //set 0x19 to 0x4051 
+	if(rc)
+		goto reg_write_err;
+	msleep(5000); 	// wait for soc do restart
+
+	/*Clear Reg*/	
+	rc = fg_masked_write(chip, chip->soc_base + SOC_RESTART, 0xFF, 0, 1); //clear 0x4051 
+	if(rc)
+		goto reg_write_err;
+	usleep_range(5000,6000);
+	
+	rc = fg_masked_write(chip, FG_BATT_SW_BATT_ID, 0x80, 0, 1); // clear 0x4150 
+	if(rc)
+		goto reg_write_err;
+	chip->fg_restarting = false;
+
+	return;
+	
+reg_write_err:
+	pr_err("[oppo_batt_id]: %s reg write error!\n",__func__);
+}
+#endif /*VENDOR_EDIT*/
+
 static void fg_shutdown(struct spmi_device *spmi)
 {
 	struct fg_chip *chip = dev_get_drvdata(&spmi->dev);
-
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/16
+// Add for Add for solve some situation cause batt id abnormal
+	int fg_boot_mode = get_boot_mode();
+#endif /*VENDOR_EDIT*/
 	if (fg_debug_mask & FG_STATUS)
 		pr_emerg("FG shutdown started\n");
 	fg_cancel_all_works(chip);
 	fg_check_ima_idle(chip);
+	
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Gauge, 2016/12/14
+// Add for solve some situation cause batt id abnormal	
+	if(chip->use_qpnp_fg && fg_boot_mode == MSM_BOOT_MODE__NORMAL) {	// only for 16061
+		if(fg_probe_success && !chip->if_batt_authenticate)  // phone boot up and the batt id is abnormal, call  batt redetect when shutdown
+			redetect_batt_id(chip);
+	}
+#endif /*VENDOR_EDIT*/	
 	chip->fg_shutdown = true;
 	if (fg_debug_mask & FG_STATUS)
 		pr_emerg("FG shutdown complete\n");

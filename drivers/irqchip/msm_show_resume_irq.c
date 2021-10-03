@@ -15,7 +15,12 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 
+#ifdef VENDOR_EDIT
+//Wenxian.zhen@Prd.BaseDrv, 2016/07/19, add for analysis power consumption
+int msm_show_resume_irq_mask = 1;
+#else //VENDOR_EDIT
 int msm_show_resume_irq_mask;
+#endif //VENDOR_EDIT 
 
 module_param_named(
 	debug_mask, msm_show_resume_irq_mask, int, S_IRUGO | S_IWUSR | S_IWGRP

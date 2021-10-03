@@ -2461,6 +2461,10 @@ unsigned int __read_mostly sched_enable_hmp = 0;
  *	rq->hmp_stats.cumulative_runnable_avg > sched_spill_load
  */
 unsigned int __read_mostly sysctl_sched_spill_nr_run = 10;
+#ifdef VENDOR_EDIT
+/* yan.chen@swdp.shanghai, 2016/10/12, export some symbol */
+EXPORT_SYMBOL(sysctl_sched_spill_nr_run);
+#endif /* VENDOR_EDIT */
 
 /*
  * Control whether or not individual CPU power consumption is used to
@@ -2494,6 +2498,11 @@ unsigned int __read_mostly sysctl_sched_prefer_sync_wakee_to_waker;
  */
 unsigned int __read_mostly sched_spill_load;
 unsigned int __read_mostly sysctl_sched_spill_load_pct = 100;
+#ifdef VENDOR_EDIT
+/* yan.chen@swdp.shanghai, 2016/10/12, export some symbol */
+EXPORT_SYMBOL(sched_spill_load);
+EXPORT_SYMBOL(sysctl_sched_spill_load_pct);
+#endif /* VENDOR_EDIT */
 
 /*
  * Tasks with demand >= sched_heavy_task will have their
@@ -2559,6 +2568,10 @@ static unsigned int __read_mostly
 sched_long_cpu_selection_threshold = 100 * NSEC_PER_MSEC;
 
 unsigned int __read_mostly sysctl_sched_restrict_cluster_spill;
+#ifdef VENDOR_EDIT
+/* yan.chen@swdp.shanghai, 2016/10/12, export some symbol */
+EXPORT_SYMBOL(sysctl_sched_restrict_cluster_spill);
+#endif /* VENDOR_EDIT */
 
 void update_up_down_migrate(void)
 {
@@ -2702,6 +2715,10 @@ int sched_boost(void)
 {
 	return boost_refcount > 0;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, export some symbol
+EXPORT_SYMBOL(sched_boost);
+#endif /* VENDOR_EDIT */
 
 int sched_set_boost(int enable)
 {
@@ -2735,6 +2752,10 @@ int sched_set_boost(int enable)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, export some symbol
+EXPORT_SYMBOL(sched_set_boost);
+#endif /* VENDOR_EDIT */
 
 int sched_boost_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp,

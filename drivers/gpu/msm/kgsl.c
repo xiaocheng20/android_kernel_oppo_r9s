@@ -43,6 +43,11 @@
 #include "kgsl_compat.h"
 #include "kgsl_pool.h"
 
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/07  Add for keylog */
+#include <soc/oppo/mmkey_log.h>
+#endif /*VENDOR_EDIT*/
+
 #undef MODULE_PARAM_PREFIX
 #define MODULE_PARAM_PREFIX "kgsl."
 
@@ -2188,7 +2193,7 @@ static long _gpuobj_map_useraddr(struct kgsl_device *device,
 		struct kgsl_mem_entry *entry,
 		struct kgsl_gpuobj_import *param)
 {
-	struct kgsl_gpuobj_import_useraddr useraddr;
+	struct kgsl_gpuobj_import_useraddr useraddr = {0};
 	int ret;
 
 	param->flags &= KGSL_MEMFLAGS_GPUREADONLY
@@ -2243,9 +2248,14 @@ static long _gpuobj_map_dma_buf(struct kgsl_device *device,
 			sizeof(buf), param->priv_len);
 	if (ret)
 		return ret;
-
+	#ifndef VENDOR_EDIT
+	//wenhua.Leng@Swdp.MultiMedia.Display 2016/08/16, CRs-Fixed: 1030098
 	if (buf.fd == 0)
 		return -EINVAL;
+	#else
+	if (buf.fd < 0)
+		return -EINVAL;
+	#endif
 
 	*fd = buf.fd;
 	dmabuf = dma_buf_get(buf.fd);
@@ -3571,6 +3581,10 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_mem_entry *entry = NULL;
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/07  Add for keylog */
+	static uint64_t keylog_count = 0;
+#endif /*VENDOR_EDIT*/
 
 	if (vma_offset == (unsigned long) device->memstore.gpuaddr)
 		return get_unmapped_area(NULL, addr, len, pgoff, flags);
@@ -3591,6 +3605,13 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 			KGSL_MEM_ERR(device,
 				"get_unmapped_area: pid %d addr %lx pgoff %lx len %ld failed error %d\n",
 				private->pid, addr, pgoff, len, (int) val);
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/07  Modify for keylog */
+		if(0 == keylog_count%100){
+			mm_keylog_write("kgsl_get_unmapped_area failed\n", "GPU OOM,app black screen\n", TYPE_IOMMU_ERROR);
+		}
+		keylog_count++;
+#endif /*VENDOR_EDIT*/
 	} else {
 		 val = _get_svm_area(private, entry, addr, len, flags);
 		 if (IS_ERR_VALUE(val))
@@ -3658,21 +3679,35 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 
 	if (cache == KGSL_CACHEMODE_WRITEBACK
 		|| cache == KGSL_CACHEMODE_WRITETHROUGH) {
-		struct scatterlist *s;
-		int i;
-		unsigned long addr = vma->vm_start;
+        #ifdef VENDOR_EDIT
+        //Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+        //add for GPU performance
+        int i;
+        unsigned long addr = vma->vm_start;
+        struct kgsl_memdesc *m = &entry->memdesc;
 
-		for_each_sg(entry->memdesc.sgt->sgl, s,
-				entry->memdesc.sgt->nents, i) {
-			int j;
-			for (j = 0; j < (s->length >> PAGE_SHIFT); j++) {
-				struct page *page = sg_page(s);
-				page = nth_page(page, j);
-				vm_insert_page(vma, addr, page);
-				addr += PAGE_SIZE;
-			}
-		}
-	}
+        for (i = 0; i < m->page_count; i++) {
+                struct page *page = m->pages[i];
+                vm_insert_page(vma, addr, page);
+                addr += PAGE_SIZE;
+        }
+        #else
+        struct scatterlist *s;
+        int i;
+        unsigned long addr = vma->vm_start;
+
+        for_each_sg(entry->memdesc.sgt->sgl, s,
+                entry->memdesc.sgt->nents, i) {
+            int j;
+            for (j = 0; j < (s->length >> PAGE_SHIFT); j++) {
+                struct page *page = sg_page(s);
+                page = nth_page(page, j);
+                vm_insert_page(vma, addr, page);
+                addr += PAGE_SIZE;
+            }
+        }
+        #endif /**VENDOR_EDIT*/
+    }
 
 	vma->vm_file = file;
 

@@ -79,6 +79,7 @@ struct mdss_pll_resources {
 
 	/*
 	 * dsi/edp/hmdi plls' base register, phy, gdsc and dynamic refresh
+	 * or cmd mode idle screen.
 	 * register mapping
 	 */
 	void __iomem	*pll_base;
@@ -139,14 +140,14 @@ struct mdss_pll_resources {
 	int		cache_pll_trim_codes[2];
 
 	/*
-	 * caching the pll trim codes rate
-	 */
-	s64		cache_pll_trim_codes_rate;
-
-	/*
 	 * for maintaining the status of saving trim codes
 	 */
 	bool		reg_upd;
+
+	/*
+	 * caching the pll trim codes rate
+	 */
+	s64		cache_pll_trim_codes_rate;
 
 	/*
 	 * Notifier callback for MDSS gdsc regulator events

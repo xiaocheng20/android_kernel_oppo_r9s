@@ -436,10 +436,12 @@ static int journal_clean_one_cp_list(struct journal_head *jh, bool destroy)
 	do {
 		jh = next_jh;
 		next_jh = jh->b_cpnext;
+
 		if (!destroy)
 			ret = __try_to_free_cp_buf(jh);
 		else
 			ret = __jbd2_journal_remove_checkpoint(jh) + 1;
+
 		if (!ret)
 			return freed;
 		if (ret == 2)
@@ -480,6 +482,7 @@ void __jbd2_journal_clean_checkpoint_list(journal_t *journal, bool destroy)
 	do {
 		transaction = next_transaction;
 		next_transaction = transaction->t_cpnext;
+
 		ret = journal_clean_one_cp_list(transaction->t_checkpoint_list,
 						destroy);
 		/*

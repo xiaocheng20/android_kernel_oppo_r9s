@@ -874,6 +874,9 @@ static void pll_db_commit_8996(struct mdss_pll_resources *pll,
 
 	data = (((pout->pll_postdiv - 1) << 4) | pdb->in.pll_lpf_res1);
 	MDSS_PLL_REG_W(pll_base, DSIPHY_PLL_PLL_LPF2_POSTDIV, data);
+    data = pout->pll_kvco_code;
+    MDSS_PLL_REG_W(pll_base, DSIPHY_PLL_KVCO_CODE, data);
+    pr_debug("kvco_code:0x%x\n", data);
 
 	data = pout->pll_kvco_code;
 	MDSS_PLL_REG_W(pll_base, DSIPHY_PLL_KVCO_CODE, data);

@@ -21,7 +21,11 @@ country AE: DFS-FCC
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of AE
+	#(5735 - 5835 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country AF: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -58,14 +62,22 @@ country AR: DFS-FCC
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5590 @ 80), (24), DFS
 	(5650 - 5730 @ 80), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of AR
+	#(5735 - 5835 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country AS: DFS-FCC
 	(2402 - 2472 @ 40), (30)
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
-	(5735 - 5850 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of AS
+	#(5735 - 5850 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country AT: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -89,8 +101,14 @@ country AU: DFS-FCC
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5590 @ 80), (24), DFS
-	(5650 - 5730 @ 80), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of AU
+	#(5650 - 5730 @ 80), (24), DFS
+	#(5735 - 5835 @ 80), (30)
+	#else /* VENDOR_EDIT */
+	(5590 - 5730 @ 80), (24), DFS
+	#endif /* VENDOR_EDIT */
 
 country AW: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -119,7 +137,13 @@ country BB: DFS-FCC
 
 country BD:
 	(2402 - 2482 @ 40), (20)
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of BD
+	#(5735 - 5835 @ 80), (30)
+	#else /* VENDOR_EDIT */
+	(5735 - 5815 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country BE: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -280,7 +304,11 @@ country CO: DFS-FCC
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
-	(5490 - 5730 @ 160), (24), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of CO
+	#(5490 - 5730 @ 160), (24), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (30)
 
 country CR: DFS-FCC
@@ -398,7 +426,13 @@ country DZ: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (23), AUTO-BW
 	(5250 - 5330 @ 80), (23), DFS, AUTO-BW
-	(5490 - 5670 @ 160), (23), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of DZ
+	#(5490 - 5670 @ 160), (23), DFS
+	#else /* VENDOR_EDIT */
+	(5490 - 5730 @ 160), (23), DFS
+	#endif /* VENDOR_EDIT */
 
 country EC: DFS-FCC
 	(2402 - 2482 @ 40), (20)
@@ -427,7 +461,13 @@ country EE: DFS-ETSI
 country EG: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 40), (20)
-	(5250 - 5330 @ 40), (20), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of EG
+	#(5250 - 5330 @ 40), (20), DFS
+	#else /* VENDOR_EDIT */
+	(5735 - 5835 @ 40), (20), DFS
+	#endif /* VENDOR_EDIT */
 
 country ES: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -588,7 +628,11 @@ country HK: DFS-FCC
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of HK
+	#(5735 - 5835 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country HN: DFS-FCC
 	(2402 - 2482 @ 40), (20)
@@ -665,6 +709,12 @@ country IL: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (20), AUTO-BW
 	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
+	#ifdef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Add for fre of IL
+	(5490 - 5730 @ 80), (20)
+	(5735 - 5835 @ 80), (20)
+	#endif /* VENDOR_EDIT */
 
 country IN: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -674,7 +724,13 @@ country IN: DFS-ETSI
 
 country IR:
 	(2402 - 2482 @ 40), (20)
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of IR
+	#(5735 - 5835 @ 80), (30)
+	#else /* VENDOR_EDIT */
+	(5735 - 5815 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country IS: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -877,6 +933,11 @@ country MA: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (20), AUTO-BW
 	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
+	#ifdef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Add for fre of MA
+	(5735 - 5835 @ 80), (20)
+	#endif /* VENDOR_EDIT */
 
 country MC: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -923,6 +984,16 @@ country MN: DFS-FCC
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
 	(5735 - 5835 @ 80), (30)
+
+#ifdef VENDOR_EDIT
+#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+#Add for Myanmar
+country MM:
+	(2402 - 2482 @ 40), (20)
+	(5170 - 5250 @ 80), (17)
+	(5250 - 5330 @ 80), (24), DFS
+	(5490 - 5710 @ 80), (24), DFS
+#endif /* VENDOR_EDIT */
 
 country MO: DFS-FCC
 	(2402 - 2482 @ 40), (20)
@@ -990,19 +1061,33 @@ country MX: DFS-FCC
 	(2402 - 2482 @ 40), (30)
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
-	(5490 - 5730 @ 160), (24), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of MX
+	#(5490 - 5730 @ 160), (24), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (30)
 
 country MY: DFS-FCC
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
-	(5490 - 5650 @ 160), (24), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of MX
+	#(5490 - 5650 @ 160), (24), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (24)
 
 country NG: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5250 - 5330 @ 80), (30), DFS
+	#ifdef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Add for fre of NG
+	(5490 - 5590 @ 80), (17), DFS
+	(5590 - 5710 @ 80), (30), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (30)
 
 country NI: DFS-FCC
@@ -1096,11 +1181,21 @@ country PH: DFS-FCC
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of PH
+	#(5735 - 5835 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country PK:
 	(2402 - 2482 @ 40), (20)
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Modify for fre of PK
+	#(5735 - 5835 @ 80), (30)
+	#else /* VENDOR_EDIT */
+	(5735 - 5815 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country PL: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
@@ -1211,7 +1306,11 @@ country RU: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (20), AUTO-BW
 	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
-	(5650 - 5710 @ 40), (30), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of RU
+	#(5650 - 5710 @ 40), (30), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (30)
 
 country RW: DFS-FCC
@@ -1248,7 +1347,11 @@ country SG: DFS-FCC
 	(2402 - 2482 @ 40), (20)
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
-	(5490 - 5730 @ 160), (24), DFS
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of SG
+	#(5490 - 5730 @ 160), (24), DFS
+	#endif /* VENDOR_EDIT */
 	(5735 - 5835 @ 80), (30)
 
 country SI: DFS-ETSI
@@ -1331,7 +1434,11 @@ country TH: DFS-FCC
 	(5170 - 5250 @ 80), (24), AUTO-BW
 	(5250 - 5330 @ 80), (24), DFS, AUTO-BW
 	(5490 - 5730 @ 160), (24), DFS
-	(5735 - 5835 @ 80), (30)
+	#ifndef VENDOR_EDIT
+	#Yuanliu.Tang@Connectivity.WiFi.Basic.Custom.FB31, 2016/08/31,
+	#Remove for fre of TH
+	#(5735 - 5835 @ 80), (30)
+	#endif /* VENDOR_EDIT */
 
 country TN: DFS-ETSI
 	(2402 - 2482 @ 40), (20)
