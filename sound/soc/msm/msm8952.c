@@ -25,13 +25,29 @@
 #include <sound/pcm.h>
 #include <sound/jack.h>
 #include <sound/q6afe-v2.h>
+/*OPPO 2016-09-15 zhzhyon@AudioDriver Add qcom patch for ADSP state*/
+#ifdef VENDOR_EDIT
+#include <sound/q6core.h>
+#endif
+/*OPPO 2016-09-15 zhzhyon Add end*/
 #include <soc/qcom/socinfo.h>
 #include "qdsp6v2/msm-pcm-routing-v2.h"
 #include "msm-audio-pinctrl.h"
 #include "../codecs/msm8x16-wcd.h"
 #include "../codecs/wsa881x-analog.h"
+#include <soc/oppo/mmkey_log.h>
 #include <linux/regulator/consumer.h>
 #define DRV_NAME "msm8952-asoc-wcd"
+
+#ifdef VENDOR_EDIT
+//Jianfeng.Qiu@Swdp.Multimedia, 2016/08/19, Add for distinguish project
+#include <soc/oppo/oppo_project.h>
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+//Jianfeng.Qiu@Swdp.Multimedia, 2016/08/10, Add for oppo audio configuration
+#include "oppo_audio_custom.h"
+#endif /* VENDOR_EDIT */
 
 #define BTSCO_RATE_8KHZ 8000
 #define BTSCO_RATE_16KHZ 16000
@@ -72,6 +88,15 @@ static atomic_t quat_mi2s_clk_ref;
 static atomic_t quin_mi2s_clk_ref;
 static atomic_t auxpcm_mi2s_clk_ref;
 
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mi2s mclk
+#if defined(OPPO_QUIN_MI2S_AK4375)
+static atomic_t quin_mi2s_mclk_ref;
+static struct mutex quin_mclk_lock;
+#endif
+#endif /* VENDOR_EDIT */
+
+
 static int msm8952_enable_dig_cdc_clk(struct snd_soc_codec *codec, int enable,
 					bool dapm);
 static bool msm8952_swap_gnd_mic(struct snd_soc_codec *codec);
@@ -101,6 +126,11 @@ static struct wcd_mbhc_config mbhc_cfg = {
 	.key_code[6] = 0,
 	.key_code[7] = 0,
 	.linein_th = 5000,
+    /*OPPO 2015-12-18 zhangping Add for dump log*/
+    #ifdef VENDOR_EDIT
+    .dump_status = 0,
+    #endif
+    /*OPPO 2015-12-18 zhangping Add for dump log end*/
 };
 
 static struct afe_clk_cfg mi2s_rx_clk_v1 = {
@@ -170,6 +200,12 @@ static const char *const proxy_rx_ch_text[] = {"One", "Two", "Three", "Four",
 static const char *const vi_feed_ch_text[] = {"One", "Two"};
 static char const *mi2s_rx_sample_rate_text[] = {"KHZ_48",
 					"KHZ_96", "KHZ_192"};
+
+/*OPPO 2015-12-18 zhangping Add for dump log*/
+#ifdef VENDOR_EDIT
+static char const *dump_status_pa_text[] = {"DISABLE", "ENABLE"};
+#endif
+/*OPPO 2015-12-18 zhangping Add for dump log end*/
 
 static inline int param_is_mask(int p)
 {
@@ -419,12 +455,48 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
 
-	pr_debug("%s()\n", __func__);
+	pr_err("%s()\n", __func__);
 	rate->min = rate->max = 48000;
 	channels->min = channels->max = 2;
 
 	return 0;
 }
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2016/01/05, Add for one chanel for tfa9890
+#if defined(OPPO_QUAT_MI2S_TFA98XX)
+static int msm_be_quat_mi2s_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+				struct snd_pcm_hw_params *params)
+{
+	struct snd_interval *rate = hw_param_interval(params,
+					SNDRV_PCM_HW_PARAM_RATE);
+
+	struct snd_interval *channels = hw_param_interval(params,
+					SNDRV_PCM_HW_PARAM_CHANNELS);
+
+	pr_debug("%s()\n", __func__);
+	rate->min = rate->max = 48000;
+	channels->min = channels->max = 1;
+
+	return 0;
+}
+#endif
+#endif /* VENDOR_EDIT */
+
+/*OPPO 2015-12-18 zhangping Add for dump log*/
+static int dump_status_track_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = mbhc_cfg.dump_status;
+	return 0;
+}
+
+static int dump_status_track_put(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+    mbhc_cfg.dump_status = ucontrol->value.integer.value[0];
+	return 0;
+}
+/*OPPO 2015-12-18 zhangping Add for dump log*/
 
 static int msm_btsco_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 					struct snd_pcm_hw_params *params)
@@ -981,7 +1053,44 @@ static const struct soc_enum msm_snd_enum[] = {
 				vi_feed_ch_text),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mi2s_rx_sample_rate_text),
 				mi2s_rx_sample_rate_text),
+    /*OPPO 2015-12-18 zhangping Add for dump log*/
+    #ifdef VENDOR_EDIT
+    SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(dump_status_pa_text), dump_status_pa_text),
+    #endif
+    /*OPPO 2015-12-18 zhangping Add for dump log end*/
 };
+
+#ifdef VENDOR_EDIT
+//Jianfeng.Qiu@Swdp.Multimedia, 2016/08/10, Add for oppo audio configuration
+static char const *oppo_spk_pa_text[] = {"DISABLE", "ENABLE"};
+static char const *oppo_hp_pa_text[] = {"DISABLE", "ENABLE"};
+static char const *oppo_pa_control_text[] = {"Off", "On"};
+
+static const struct soc_enum oppo_audio_enum[] = {
+    SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(oppo_spk_pa_text), oppo_spk_pa_text),
+    SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(oppo_hp_pa_text), oppo_hp_pa_text),
+    SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(oppo_pa_control_text), oppo_pa_control_text),
+};
+
+static int oppo_pa_control_get(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+    //pr_info("%s: \n", __func__);
+
+    return 0;
+}
+
+static int oppo_pa_control_put(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
+{
+    int enable = 0;
+
+    enable = ucontrol->value.integer.value[0];
+    pr_info("%s: enable %d\n", __func__, enable);
+    oppo_spk_pa_enable(enable);
+
+    return 0;
+}
+#endif /* VENDOR_EDIT */
+
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("MI2S_RX Format", msm_snd_enum[0],
@@ -1000,6 +1109,22 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX SampleRate", msm_snd_enum[6],
 			mi2s_rx_sample_rate_get, mi2s_rx_sample_rate_put),
+#ifdef VENDOR_EDIT
+//Jianfeng.Qiu@Swdp.Multimedia, 2016/08/10, Add for oppo audio configuration
+    SOC_ENUM_EXT("Ext_SPK_Switch", oppo_audio_enum[0],
+            oppo_speaker_pa_get, oppo_speaker_pa_put),
+    SOC_ENUM_EXT("Ext_HP_Switch", oppo_audio_enum[1],
+            oppo_hp_pa_get, oppo_hp_pa_put),
+    SOC_ENUM_EXT("Oppo Pa Control", oppo_audio_enum[2],
+            oppo_pa_control_get, oppo_pa_control_put),
+#endif /* VENDOR_EDIT */
+
+    /*OPPO 2015-12-18 zhangping Add for dump log*/
+    #ifdef VENDOR_EDIT
+    SOC_ENUM_EXT("Headset Insert Dump", msm_snd_enum[7],
+        dump_status_track_get, dump_status_track_put),
+    #endif
+    /*OPPO 2015-12-18 zhangping Add for dump log end*/
 };
 
 static int msm8952_mclk_event(struct snd_soc_dapm_widget *w,
@@ -1135,6 +1260,71 @@ done:
 	return ret;
 }
 
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mi2s mclk
+#if defined(OPPO_QUIN_MI2S_AK4375_MCLK)
+static int msm8952_enable_quin_mi2s_mclk(struct snd_soc_card *card, bool enable)
+{
+	int ret = 0;
+	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+
+	pr_debug("%s: enable %d mclk ref counter %d\n",
+		   __func__, enable,
+		   atomic_read(&quin_mi2s_mclk_ref));
+
+	mutex_lock(&quin_mclk_lock);
+	if (enable) {
+		if (!atomic_read(&quin_mi2s_mclk_ref)) {
+			if (pdata->afe_clk_ver == AFE_CLK_VERSION_V1) {
+				wsa_ana_clk_v1.clk_val1 =
+						Q6AFE_LPASS_OSR_CLK_9_P600_MHZ;
+				ret = afe_set_lpass_clock(
+						AFE_PORT_ID_PRIMARY_MI2S_RX,
+						&wsa_ana_clk_v1);
+			} else {
+				wsa_ana_clk.enable = enable;
+				ret = afe_set_lpass_clock_v2(
+						AFE_PORT_ID_PRIMARY_MI2S_RX,
+						&wsa_ana_clk);
+			}
+			if (ret < 0) {
+				pr_err("%s: failed to enable mclk %d\n",
+					__func__, ret);
+				goto done;
+			}
+		}
+		atomic_inc(&quin_mi2s_mclk_ref);
+	} else {
+		if (!atomic_read(&quin_mi2s_mclk_ref))
+			goto done;
+		if (!atomic_dec_return(&quin_mi2s_mclk_ref)) {
+			if (pdata->afe_clk_ver == AFE_CLK_VERSION_V1) {
+				wsa_ana_clk_v1.clk_val1 =
+						Q6AFE_LPASS_OSR_CLK_DISABLE;
+				ret = afe_set_lpass_clock(
+						AFE_PORT_ID_PRIMARY_MI2S_RX,
+						&wsa_ana_clk_v1);
+			} else {
+				wsa_ana_clk.enable = enable;
+				ret = afe_set_lpass_clock_v2(
+						AFE_PORT_ID_PRIMARY_MI2S_RX,
+						&wsa_ana_clk);
+			}
+			if (ret < 0) {
+				pr_err("%s: failed to disable mclk %d\n",
+					__func__, ret);
+				goto done;
+			}
+		}
+	}
+done:
+	mutex_unlock(&quin_mclk_lock);
+	return ret;
+}
+#endif
+#endif /* VENDOR_EDIT */
+
+
 static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
@@ -1146,6 +1336,15 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 		 substream->name, substream->stream);
+
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add for qcom patch to judge ADSP state*/
+	#ifdef VENDOR_EDIT
+	if (!q6core_is_adsp_ready()) {
+		pr_err("%s(): adsp not ready\n", __func__);
+		return -EINVAL;
+	}
+	#endif
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add end*/
 
 	/*
 	 * configure the slave select to
@@ -1237,6 +1436,15 @@ static int msm_prim_auxpcm_startup(struct snd_pcm_substream *substream)
 	pr_debug("%s(): substream = %s\n",
 			__func__, substream->name);
 
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add for qcom patch to judge adsp state*/
+	#ifdef VENDOR_EDIT
+	if (!q6core_is_adsp_ready()) {
+		pr_err("%s(): adsp not ready\n", __func__);
+		return -EINVAL;
+	}
+	#endif
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add end*/
+
 	/* mux config to route the AUX MI2S */
 	if (pdata->vaddr_gpio_mux_mic_ctl) {
 		val = ioread32(pdata->vaddr_gpio_mux_mic_ctl);
@@ -1303,6 +1511,14 @@ static int msm_sec_mi2s_snd_startup(struct snd_pcm_substream *substream)
 					__func__);
 		return 0;
 	}
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add for qcom patch to judge adsp state*/
+	#ifdef VENDOR_EDIT
+	if (!q6core_is_adsp_ready()) {
+		pr_err("%s(): adsp not ready\n", __func__);
+		return -EINVAL;
+	}
+	#endif
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add end*/
 	if ((pdata->ext_pa & SEC_MI2S_ID) == SEC_MI2S_ID) {
 		if (pdata->vaddr_gpio_mux_spkr_ctl) {
 			val = ioread32(pdata->vaddr_gpio_mux_spkr_ctl);
@@ -1376,11 +1592,20 @@ static int msm_quat_mi2s_snd_startup(struct snd_pcm_substream *substream)
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 				substream->name, substream->stream);
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add for qcom patch to judge adsp patch*/
+	#ifdef VENDOR_EDIT
+	if (!q6core_is_adsp_ready()) {
+		pr_err("%s(): adsp not ready\n", __func__);
+		return -EINVAL;
+	}
+	#endif
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add end*/
 	if (pdata->vaddr_gpio_mux_mic_ctl) {
 		val = ioread32(pdata->vaddr_gpio_mux_mic_ctl);
 		val = val | 0x02020002;
 		iowrite32(val, pdata->vaddr_gpio_mux_mic_ctl);
 	}
+	printk("acquire quat i2s\n");
 	ret = msm_mi2s_sclk_ctl(substream, true);
 	if (ret < 0) {
 		pr_err("failed to enable sclk\n");
@@ -1410,6 +1635,7 @@ static void msm_quat_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 				substream->name, substream->stream);
+	printk("release quat i2s\n");
 	ret = msm_mi2s_sclk_ctl(substream, false);
 	if (ret < 0)
 		pr_err("%s:clock disable failed\n", __func__);
@@ -1434,6 +1660,14 @@ static int msm_quin_mi2s_snd_startup(struct snd_pcm_substream *substream)
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 				substream->name, substream->stream);
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add for qcom patch to judge adsp state*/
+	#ifdef VENDOR_EDIT
+	if (!q6core_is_adsp_ready()) {
+		pr_err("%s(): adsp not ready\n", __func__);
+		return -EINVAL;
+	}
+	#endif
+	/*OPPO 2016-09-15 zhzhyon@AudioDriver Add end*/
 	if (pdata->vaddr_gpio_mux_quin_ctl) {
 		val = ioread32(pdata->vaddr_gpio_mux_quin_ctl);
 		val = val | 0x00000001;
@@ -1446,6 +1680,23 @@ static int msm_quin_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		pr_err("failed to enable sclk\n");
 		return ret;
 	}
+	#ifdef VENDOR_EDIT
+    //John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mi2s mclk
+	//set mclk
+	#if defined(OPPO_QUIN_MI2S_AK4375_MCLK)
+    	if (substream->stream ==
+    			SNDRV_PCM_STREAM_PLAYBACK) {
+    		ret = msm8952_enable_quin_mi2s_mclk(card, true);
+    		if (ret < 0) {
+    			pr_err("%s: failed to enable mclk for wsa %d\n",
+    				__func__, ret);
+    			return ret;
+    		}
+    	}
+	#endif
+	//end set mclk
+    #endif /* VENDOR_EDIT */
+
 	ret = msm_gpioset_activate(CLIENT_WCD_INT, "quin_i2s");
 	if (ret < 0) {
 		pr_err("failed to enable codec gpios\n");
@@ -1468,6 +1719,15 @@ static void msm_quin_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 {
 	int ret;
 
+	/*OPPO 2016-06-10 zhzhyon@AudioDriver Add for enable quin mi2s mclk*/
+	#ifdef VENDOR_EDIT
+	#if defined(OPPO_QUIN_MI2S_AK4375_MCLK)
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *card = rtd->card;
+	#endif
+	#endif
+	/*OPPO 2016-06-10 zhzhyon@AudioDriver Add end*/
+
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 				substream->name, substream->stream);
 	ret = msm_mi2s_sclk_ctl(substream, false);
@@ -1475,6 +1735,21 @@ static void msm_quin_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 		pr_err("%s:clock disable failed\n", __func__);
 	if (atomic_read(&quin_mi2s_clk_ref) > 0)
 		atomic_dec(&quin_mi2s_clk_ref);
+
+	 #ifdef VENDOR_EDIT
+        //John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mi2s mclk
+            #if defined(OPPO_QUIN_MI2S_AK4375_MCLK)
+            if (substream->stream ==
+                    SNDRV_PCM_STREAM_PLAYBACK) {
+                ret = msm8952_enable_quin_mi2s_mclk(card, false);
+                if (ret < 0) {
+                    pr_err("%s: failed to disable mclk for wsa %d\n",
+                        __func__, ret);
+                }
+            }
+            #endif
+        #endif /* VENDOR_EDIT */
+
 	ret = msm_gpioset_suspend(CLIENT_WCD_INT, "quin_i2s");
 	if (ret < 0) {
 		pr_err("%s: gpio set cannot be de-activated %sd",
@@ -1495,7 +1770,14 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8952_wcd_cal)->X) = (Y))
+#ifndef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2016/05/25, Modify for expand headset detect
+/*
 	S(v_hs_max, 1500);
+*/
+#else /* VENDOR_EDIT */
+    S(v_hs_max, 1700);
+#endif /* VENDOR_EDIT */
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8952_wcd_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -1518,6 +1800,9 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 	 * 210-290 == Button 2
 	 * 360-680 == Button 3
 	 */
+    #ifndef VENDOR_EDIT
+    //John.Xu@PhoneSw.AudioDriver, 2015/11/27, Modify for headset button
+    /*
 	btn_low[0] = 75;
 	btn_high[0] = 75;
 	btn_low[1] = 150;
@@ -1528,6 +1813,44 @@ static void *def_msm8952_wcd_mbhc_cal(void)
 	btn_high[3] = 450;
 	btn_low[4] = 500;
 	btn_high[4] = 500;
+    */
+    #else /* VENDOR_EDIT */
+    //zhangping@PhoneSw.AudioDriver, 2016/11/04, Modify for headset button
+    if (is_project(OPPO_16017) || is_project(OPPO_16027)) {
+        btn_low[0] = 60;
+        btn_high[0] = 130;
+        btn_low[1] = 130;
+        btn_high[1] = 131;
+        btn_low[2] = 131;
+        btn_high[2] = 132;
+        btn_low[3] = 132;
+        btn_high[3] = 133;
+        btn_low[4] = 240;
+        btn_high[4] = 315;
+    } else if (is_project(OPPO_16061)) {
+        btn_low[0] = 60;
+        btn_high[0] = 130;
+        btn_low[1] = 130;
+        btn_high[1] = 131;
+        btn_low[2] = 131;
+        btn_high[2] = 132;
+        btn_low[3] = 132;
+        btn_high[3] = 133;
+        btn_low[4] = 400;
+        btn_high[4] = 400;
+    } else {
+        btn_low[0] = 25;
+        btn_high[0] = 130;
+        btn_low[1] = 130;
+        btn_high[1] = 131;
+        btn_low[2] = 131;
+        btn_high[2] = 132;
+        btn_low[3] = 132;
+        btn_high[3] = 133;
+        btn_low[4] = 240;
+        btn_high[4] = 315;
+    }
+    #endif /* VENDOR_EDIT */
 
 	return msm8952_wcd_cal;
 }
@@ -1795,6 +2118,12 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.cpu_dai_name = "TERT_MI2S_TX_HOSTLESS",
 		.platform_name  = "msm-pcm-hostless",
 		.dynamic = 1,
+/*oppo 2016-06-23 add by zhangping for MMI test*/
+     	#ifdef VENDOR_EDIT
+		.dpcm_playback = 1,
+		#endif
+/*oppo 2016-06-23 add by zhangping for MMI test end*/
+
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
 			SND_SOC_DPCM_TRIGGER_POST},
@@ -2273,12 +2602,32 @@ static struct snd_soc_dai_link msm8952_dai[] = {
 		.stream_name = "Quaternary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
+		#ifndef VENDOR_EDIT
+		//John.Xu@PhoneSw.AudioDriver, 2016/02/05, Modify for tfa98xx for 15103
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
+		#else /* VENDOR_EDIT */
+		    #if defined(OPPO_QUAT_MI2S_TFA98XX)
+    		.codec_dai_name = "tfa98xx-aif-8-36",
+    		.codec_name = "tfa98xx.8-0036",
+    		#else
+    		.codec_dai_name = "snd-soc-dummy-dai",
+    		.codec_name = "snd-soc-dummy",
+    		#endif
+		#endif /* VENDOR_EDIT */
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.be_id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
+		#ifndef VENDOR_EDIT
+		//John.Xu@PhoneSw.AudioDriver, 2016/02/05, Modify for tfa98xx for 15103
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		#else /* VENDOR_EDIT */
+    		#if defined(OPPO_QUAT_MI2S_TFA98XX)
+    		.be_hw_params_fixup = msm_be_quat_mi2s_hw_params_fixup,
+    		#else
+    		.be_hw_params_fixup = msm_be_hw_params_fixup,
+    		#endif
+		#endif /* VENDOR_EDIT */
 		.ops = &msm8952_quat_mi2s_be_ops,
 		.ignore_pmdown_time = 1, /* dai link has playback support */
 		.ignore_suspend = 1,
@@ -2501,14 +2850,44 @@ static struct snd_soc_dai_link msm8952_hdmi_dba_dai_link[] = {
 	},
 };
 
+#ifdef VENDOR_EDIT //Jianfeng.Qiu@Multimedia.Audio, 2015/06/03, Add for no sound when ap suspend in call
+#if defined(OPPO_QUIN_MI2S_AK4375)
+static int ak4376_audrx_init(struct snd_soc_pcm_runtime *rtd)
+{
+
+	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+
+	pr_err("%s(),dev_name%s\n", __func__, dev_name(cpu_dai->dev));
+
+	snd_soc_dapm_ignore_suspend(dapm, "AK4376 HPL");
+	snd_soc_dapm_ignore_suspend(dapm, "AK4376 HPR");
+
+	snd_soc_dapm_sync(dapm);
+
+    return 0;
+}
+#endif
+#endif /* VENDOR_EDIT */
+
+
 static struct snd_soc_dai_link msm8952_quin_dai_link[] = {
 	{
 		.name = LPASS_BE_QUIN_MI2S_RX,
 		.stream_name = "Quinary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.5",
 		.platform_name = "msm-pcm-routing",
+		/*OPPO 2016-06-10 zhzhyon@AudioDriver Add for AK4376 DAI_LINK*/
+		#if defined(OPPO_QUIN_MI2S_AK4375)
+		.codec_dai_name = "ak4376-AIF1",
+    		.codec_name = "ak4376.8-0010",
+    		.init = ak4376_audrx_init,
+		#else
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
+		#endif
+		/*OPPO 2016-06-10 zhzhyon@AudioDriver Add end*/
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.be_id = MSM_BACKEND_DAI_QUINARY_MI2S_RX,
@@ -2870,6 +3249,13 @@ static int msm8952_asoc_machine_probe(struct platform_device *pdev)
 	struct resource	*muxsel;
 	char *temp_str = NULL;
 
+    #ifdef VENDOR_EDIT
+    //John.Xu@PhoneSw.AudioDriver, 2015/10/19, Add for MM Key log
+    char ret_str[30];
+    #endif /* VENDOR_EDIT */
+	pr_err("msm8952_asoc_machine_probe\n");
+
+
 	pdata = devm_kzalloc(&pdev->dev,
 			sizeof(struct msm8916_asoc_mach_data), GFP_KERNEL);
 	if (!pdata)
@@ -3129,6 +3515,15 @@ parse_mclk_freq:
 	atomic_set(&quin_mi2s_clk_ref, 0);
 	atomic_set(&auxpcm_mi2s_clk_ref, 0);
 
+	#ifdef VENDOR_EDIT
+    	//John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mi2s mclk
+    	#if defined(OPPO_QUIN_MI2S_AK4375)
+       atomic_set(&quin_mi2s_mclk_ref, 0);
+       mutex_init(&quin_mclk_lock);
+    	#endif
+    	#endif /* VENDOR_EDIT */
+
+
 	ret = snd_soc_of_parse_audio_routing(card,
 			"qcom,audio-routing");
 	if (ret)
@@ -3140,12 +3535,25 @@ parse_mclk_freq:
 		goto err;
 	}
 
+#ifdef VENDOR_EDIT
+//Jianfeng.Qiu@Swdp.Multimedia, 2016/08/10, Add for oppo audio configuration
+    oppo_audio_init(pdev);
+#endif /* VENDOR_EDIT */
+
 	ret = snd_soc_register_card(card);
 	if (ret) {
 		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n",
 			ret);
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/10/20, Add for MM Key log
+    if(ret != -EPROBE_DEFER){
+        snprintf(ret_str, sizeof(ret_str), "%d", ret);
+        mm_keylog_write("register sound card error", ret_str, TYPE_SOUND_CARD_REGISTER_FAIL);
+    }
+#endif /* VENDOR_EDIT */
 		goto err;
 	}
+	pr_info("%s sucessfully!! \n ", __func__);
 	return 0;
 err:
 	if (pdata->vaddr_gpio_mux_spkr_ctl)
@@ -3190,6 +3598,12 @@ static int msm8952_asoc_machine_remove(struct platform_device *pdev)
 		}
 		mutex_destroy(&pdata->wsa_mclk_mutex);
 	}
+	#ifdef VENDOR_EDIT
+	//John.Xu@PhoneSw.AudioDriver, 2015/11/25, Add for enable quin mclk
+    #if defined(OPPO_QUIN_MI2S_AK4375)
+	mutex_destroy(&quin_mclk_lock);
+	#endif
+	#endif /* VENDOR_EDIT */
 	snd_soc_unregister_card(card);
 	mutex_destroy(&pdata->cdc_mclk_mutex);
 	return 0;

@@ -27,6 +27,18 @@ obj-$(CONFIG_SND_SOC_MSM8996) += snd-soc-msm8996.o
 # for MSM 8x16/8952 sound card driver
 snd-soc-msm8x16-objs := msm8952.o msm-audio-pinctrl.o
 snd-soc-msm8x16-objs += msm8952-slimbus.o msm8952-dai-links.o
+#ifdef VENDOR_EDIT
+#Jianfeng.Qiu@Swdp.Multimedia  2016/08/10, Add for oppo audio custom
+snd-soc-msm8x16-objs += oppo_audio_custom.o
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+#John.Xu 2016-02-05 add for tfa9890 and ak4375 multi-project baseline
+ifneq ($(filter $(OPPO_TARGET_DEVICE),MSM_16017 MSM_16027),)
+KBUILD_CFLAGS += -DOPPO_QUIN_MI2S_AK4375
+KBUILD_CFLAGS += -DOPPO_QUAT_MI2S_TFA98XX
+endif
+#endif /* VENDOR_EDIT */
 obj-$(CONFIG_SND_SOC_MSM8X16) += snd-soc-msm8x16.o
 
 # for MDM Californium sound card driver
