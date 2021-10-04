@@ -145,6 +145,13 @@ struct scan_control {
  * From 0 .. 100.  Higher means more swappy.
  */
 int vm_swappiness = 60;
+#ifdef VENDOR_EDIT //yixue.ge@psw.bsp.kernel 20170720 add for add direct_vm_swappiness
+/*
+ * Direct reclaim swappiness, exptct 0 - 60. Higher means more swappy and slower.
+ */
+int direct_vm_swappiness = 60;
+#endif
+
 /*
  * The total number of pages which are beyond the high watermark within all
  * zones.
@@ -1599,6 +1606,26 @@ static int current_may_throttle(void)
 		bdi_write_congested(current->backing_dev_info);
 }
 
+
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.MM, 2018-04-28, fix direct reclaim slow issue*/
+extern bool is_fg(int uid);
+static inline int get_current_adj(void)
+{
+#ifdef CONFIG_OPPO_FG_OPT
+	int cur_uid;
+#endif
+	if (current->signal->oom_score_adj < 0)
+		return 0;
+#ifdef CONFIG_OPPO_FG_OPT
+	cur_uid = current_uid().val;
+	if (is_fg(cur_uid))
+		return 0;
+#endif
+	return current->signal->oom_score_adj;
+}
+#endif /*VENDOR*/
+
 /*
  * shrink_inactive_list() is a helper for shrink_zone().  It returns the number
  * of reclaimed pages
@@ -1739,9 +1766,16 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	 * is congested. Allow kswapd to continue until it starts encountering
 	 * unqueued dirty pages or cycling through the LRU too quickly.
 	 */
+	#ifdef VENDOR_EDIT
+	/*Huacai.Zhou@PSW.BSP.Kernel.MM, 2018-04-28, fix direct reclaim slow issue*/
+	if (!sc->hibernation_mode && !current_is_kswapd() &&
+	    current_may_throttle() && get_current_adj())
+		wait_iff_congested(zone, BLK_RW_ASYNC, HZ/10);
+	#else
 	if (!sc->hibernation_mode && !current_is_kswapd() &&
 	    current_may_throttle())
 		wait_iff_congested(zone, BLK_RW_ASYNC, HZ/10);
+	#endif /*VENDOR_EDIT*/
 
 	trace_mm_vmscan_lru_shrink_inactive(zone->zone_pgdat->node_id,
 		zone_idx(zone),
@@ -1924,7 +1958,12 @@ static int inactive_anon_is_low_global(struct zone *zone)
 	active = zone_page_state(zone, NR_ACTIVE_ANON);
 	inactive = zone_page_state(zone, NR_INACTIVE_ANON);
 
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Performance, 2018-10-13, fix anon inactive/active ratio*/
+	if (inactive  <  active)
+#else
 	if (inactive * zone->inactive_ratio < active)
+#endif /*VENDOR_EDIT*/
 		return 1;
 
 	return 0;
@@ -1980,7 +2019,12 @@ static int inactive_file_is_low(struct lruvec *lruvec)
 	inactive = get_lru_size(lruvec, LRU_INACTIVE_FILE);
 	active = get_lru_size(lruvec, LRU_ACTIVE_FILE);
 
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.Performance, 2018-10-13, try to keep more file pages*/
+	return active >  (inactive <<  1);
+#else
 	return active > inactive;
+#endif /*VENDOR_EDIT*/
 }
 
 static int inactive_list_is_low(struct lruvec *lruvec, enum lru_list lru)
@@ -2035,6 +2079,11 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	bool some_scanned;
 	int pass;
 
+#ifdef VENDOR_EDIT //yixue.ge@psw.bsp.kernel 20170720 add for add direct_vm_swappiness
+	if (!current_is_kswapd()) {
+		swappiness = direct_vm_swappiness;
+	}
+#endif /*VENDOR_EDIT*/
 	/*
 	 * If the zone or memcg is small, nr[l] can be 0.  This
 	 * results in no scanning on this priority and a potential
@@ -2051,7 +2100,11 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 		force_scan = true;
 
 	/* If we have no swap space, do not bother scanning anon pages. */
+#ifdef VENDOR_EDIT //yixue.ge@psw.bsp.kernel.driver 20170810 modify for reserver some zram disk size
+	if (!sc->may_swap || (get_nr_swap_pages() <= total_swap_pages>>6)) {
+#else
 	if (!sc->may_swap || (get_nr_swap_pages() <= 0)) {
+#endif /*VENDOR_EDIT*/
 		scan_balance = SCAN_FILE;
 		goto out;
 	}
@@ -3528,7 +3581,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	wake_up_interruptible(&pgdat->kswapd_wait);
 }
 
-#ifdef CONFIG_HIBERNATION
+//#ifdef CONFIG_HIBERNATION
 /*
  * Try to free `nr_to_reclaim' of memory, system-wide, and return the number of
  * freed pages.
@@ -3566,7 +3619,8 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 
 	return nr_reclaimed;
 }
-#endif /* CONFIG_HIBERNATION */
+EXPORT_SYMBOL(shrink_all_memory);
+//#endif /* CONFIG_HIBERNATION */
 
 /* It's optimal to keep kswapds on the same CPUs as their memory, but
    not required for correctness.  So if the last cpu in a node goes

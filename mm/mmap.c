@@ -447,12 +447,27 @@ static void validate_mm(struct mm_struct *mm)
 	struct vm_area_struct *vma = mm->mmap;
 
 	while (vma) {
+	#ifdef VENDOR_EDIT 
+	//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
+		struct anon_vma *anon_vma = vma->anon_vma;
+	#endif
 		struct anon_vma_chain *avc;
 
+	#ifndef VENDOR_EDIT 
+	//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 		vma_lock_anon_vma(vma);
 		list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
 			anon_vma_interval_tree_verify(avc);
 		vma_unlock_anon_vma(vma);
+	#else
+		if (anon_vma) {
+			anon_vma_lock_read(anon_vma);
+			list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
+				anon_vma_interval_tree_verify(avc);
+			anon_vma_unlock_read(anon_vma);
+		}
+	#endif
+
 		highest_address = vma->vm_end;
 		vma = vma->vm_next;
 		i++;
@@ -1275,6 +1290,13 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 	vm_flags_t vm_flags;
 
 	*populate = 0;
+
+#ifdef VENDOR_EDIT
+	// fangpan@Swdp.shanghai, 2016/02/02, add sdcardfs related interface
+	// in the file system
+	while (file && (file->f_mode & FMODE_NONMAPPABLE))
+		file = file->f_op->get_lower_file(file);
+#endif
 
 #ifdef CONFIG_MSM_APP_SETTINGS
 	if (file && file->f_path.dentry) {
@@ -2185,17 +2207,35 @@ static int acct_stack_growth(struct vm_area_struct *vma, unsigned long size, uns
  */
 int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 {
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	int error;
+#else
+	int error = 0;
+#endif
 
 	if (!(vma->vm_flags & VM_GROWSUP))
 		return -EFAULT;
 
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	/*
 	 * We must make sure the anon_vma is allocated
 	 * so that the anon_vma locking is not a noop.
 	 */
+#else
+	/* Guard against wrapping around to address 0. */
+	if (address < PAGE_ALIGN(address+4))
+		address = PAGE_ALIGN(address+4);
+	else
+		return -ENOMEM;
+
+	/* We must make sure the anon_vma is allocated. */
+#endif
 	if (unlikely(anon_vma_prepare(vma)))
 		return -ENOMEM;
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	vma_lock_anon_vma(vma);
 
 	/*
@@ -2211,6 +2251,14 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 		return -ENOMEM;
 	}
 	error = 0;
+#else
+	/*
+	 * vma->vm_start/vm_end cannot change under us because the caller
+	 * is required to hold the mmap_sem in read mode.  We need the
+	 * anon_vma lock to serialize against concurrent expand_stacks.
+	 */
+	 anon_vma_lock_write(vma->anon_vma);
+#endif
 
 	/* Somebody else might have raced and expanded it already */
 	if (address > vma->vm_end) {
@@ -2223,6 +2271,8 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 		if (vma->vm_pgoff + (size >> PAGE_SHIFT) >= vma->vm_pgoff) {
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
+				//#ifndef VENDOR_EDIT 
+				//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 				/*
 				 * vma_gap_update() doesn't support concurrent
 				 * updates, but we only hold a shared mmap_sem
@@ -2234,6 +2284,19 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 				 * So, we reuse mm->page_table_lock to guard
 				 * against concurrent vma expansions.
 				 */
+				 //#else
+				 /*
+				 * vma_gap_update() doesn't support concurrent
+				 * updates, but we only hold a shared mmap_sem
+				 * lock here, so we need to protect against
+				 * concurrent vma expansions.
+				 * anon_vma_lock_write() doesn't help here, as
+				 * we don't guarantee that all growable vmas
+				 * in a mm share the same root anon vma.
+				 * So, we reuse mm->page_table_lock to guard
+				 * against concurrent vma expansions.
+				 */
+				 //#endif
 				spin_lock(&vma->vm_mm->page_table_lock);
 				anon_vma_interval_tree_pre_update_vma(vma);
 				vma->vm_end = address;
@@ -2248,7 +2311,12 @@ int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 			}
 		}
 	}
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	vma_unlock_anon_vma(vma);
+#else
+	anon_vma_unlock_write(vma->anon_vma);
+#endif
 	khugepaged_enter_vma_merge(vma, vma->vm_flags);
 	validate_mm(vma->vm_mm);
 	return error;
@@ -2263,25 +2331,39 @@ int expand_downwards(struct vm_area_struct *vma,
 {
 	int error;
 
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	/*
 	 * We must make sure the anon_vma is allocated
 	 * so that the anon_vma locking is not a noop.
 	 */
 	if (unlikely(anon_vma_prepare(vma)))
 		return -ENOMEM;
+#endif
 
 	address &= PAGE_MASK;
 	error = security_mmap_addr(address);
 	if (error)
 		return error;
 
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	vma_lock_anon_vma(vma);
+#else
+	/* We must make sure the anon_vma is allocated. */
+	if (unlikely(anon_vma_prepare(vma)))
+		return -ENOMEM;
+#endif
 
 	/*
 	 * vma->vm_start/vm_end cannot change under us because the caller
 	 * is required to hold the mmap_sem in read mode.  We need the
 	 * anon_vma lock to serialize against concurrent expand_stacks.
 	 */
+#ifdef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
+anon_vma_lock_write(vma->anon_vma);
+#endif
 
 	/* Somebody else might have raced and expanded it already */
 	if (address < vma->vm_start) {
@@ -2294,6 +2376,8 @@ int expand_downwards(struct vm_area_struct *vma,
 		if (grow <= vma->vm_pgoff) {
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
+				//#ifndef VENDOR_EDIT 
+				//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 				/*
 				 * vma_gap_update() doesn't support concurrent
 				 * updates, but we only hold a shared mmap_sem
@@ -2305,6 +2389,19 @@ int expand_downwards(struct vm_area_struct *vma,
 				 * So, we reuse mm->page_table_lock to guard
 				 * against concurrent vma expansions.
 				 */
+				 //#else
+				 /*
+				 * vma_gap_update() doesn't support concurrent
+				 * updates, but we only hold a shared mmap_sem
+				 * lock here, so we need to protect against
+				 * concurrent vma expansions.
+				 * anon_vma_lock_write() doesn't help here, as
+				 * we don't guarantee that all growable vmas
+				 * in a mm share the same root anon vma.
+				 * So, we reuse mm->page_table_lock to guard
+				 * against concurrent vma expansions.
+				 */
+				 //#endif
 				spin_lock(&vma->vm_mm->page_table_lock);
 				anon_vma_interval_tree_pre_update_vma(vma);
 				vma->vm_start = address;
@@ -2317,7 +2414,12 @@ int expand_downwards(struct vm_area_struct *vma,
 			}
 		}
 	}
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 	vma_unlock_anon_vma(vma);
+#else
+	anon_vma_unlock_write(vma->anon_vma);
+#endif
 	khugepaged_enter_vma_merge(vma, vma->vm_flags);
 	validate_mm(vma->vm_mm);
 	return error;

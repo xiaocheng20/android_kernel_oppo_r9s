@@ -81,6 +81,9 @@ static void check_poison_mem(struct page *page,
 
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 16, 1, start,
 			end - start + 1, 1);
+	#ifdef VENDOR_EDIT //yixue.ge@bsp.drv add bug when mem corruption
+	BUG_ON(PANIC_CORRUPTION);
+	#endif
 	dump_stack();
 }
 
