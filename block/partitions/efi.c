@@ -625,8 +625,14 @@ static int find_valid_gpt(struct parsed_partitions *state, gpt_header **gpt,
 		good_agpt = is_gpt_valid(state,
 					 le64_to_cpu(pgpt->alternate_lba),
 					 &agpt, &aptes);
+		#ifndef VENDOR_EDIT	
+		//rendong.shi@bsp.boot,2016/07/23,add modify for we can use gpt_backup when primary gpt was damaged		 
         if (!good_agpt && force_gpt)
                 good_agpt = is_gpt_valid(state, lastlba, &agpt, &aptes);
+		#else
+		if (!good_agpt)
+                good_agpt = is_gpt_valid(state, lastlba, &agpt, &aptes);
+		#endif		
 
         /* The obviously unsuccessful case */
         if (!good_pgpt && !good_agpt)
