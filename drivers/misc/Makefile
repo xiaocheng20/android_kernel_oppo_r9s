@@ -68,3 +68,7 @@ obj-$(CONFIG_TI_DRV2667) += ti_drv2667.o
 obj-$(CONFIG_USB_EXT_TYPE_C_PERICOM)	+= type-c-pericom.o
 obj-$(CONFIG_USB_EXT_TYPE_C_TI)		+= type-c-ti.o
 obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
+
+# ifdef VENDOR_EDIT //Tong.han@BSP.Group.Tp, 2015/04/05, Add for KTD breath led
+obj-$(CONFIG_KTD2026_SLED)  += ktd_shineled/
+# endif

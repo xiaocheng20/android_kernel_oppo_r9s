@@ -55,11 +55,19 @@ void lock_device_hotplug(void)
 {
 	mutex_lock(&device_hotplug_lock);
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2016/06/24, export some symbol
+EXPORT_SYMBOL(lock_device_hotplug);
+#endif /* VENDOR_EDIT */
 
 void unlock_device_hotplug(void)
 {
 	mutex_unlock(&device_hotplug_lock);
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2016/06/24, export some symbol
+EXPORT_SYMBOL(unlock_device_hotplug);
+#endif /* VENDOR_EDIT */
 
 int lock_device_hotplug_sysfs(void)
 {
@@ -794,10 +802,28 @@ static inline bool live_in_glue_dir(struct kobject *kobj,
 	return true;
 }
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/12/13 add for otg issue
+static inline bool oppo_live_in_glue_dir(struct kobject *kobj,
+					struct device *dev)
+{
+	if (!kobj)
+		return false;
+	return true;
+}
+#endif /* VENDOR_EDIT */
+
 static inline struct kobject *get_glue_dir(struct device *dev)
 {
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/11/14 modify for otg issue, qcm case02648375
 	if (live_in_glue_dir(&dev->kobj, dev))
 		return dev->kobj.parent;
+#else
+	if (oppo_live_in_glue_dir(&dev->kobj, dev))
+		return dev->kobj.parent;
+#endif /* VENDOR_EDIT */
+
 	return NULL;
 }
 /*
@@ -1466,6 +1492,10 @@ int device_offline(struct device *dev)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2016/06/24, export some symbol
+EXPORT_SYMBOL(device_offline);
+#endif /* VENDOR_EDIT */
 
 /**
  * device_online - Put the device back online after successful device_offline().
@@ -1497,6 +1527,10 @@ int device_online(struct device *dev)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2016/06/24, export some symbol
+EXPORT_SYMBOL(device_online);
+#endif /* VENDOR_EDIT */
 
 struct root_device {
 	struct device dev;

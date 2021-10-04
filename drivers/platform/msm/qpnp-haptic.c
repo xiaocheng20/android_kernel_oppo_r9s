@@ -25,6 +25,10 @@
 #include <linux/delay.h>
 #include <linux/qpnp/qpnp-haptic.h>
 #include "../../staging/android/timed_output.h"
+#ifdef VENDOR_EDIT
+//rendong.shi@Bsp.drv,2016/04/16,add for  not enable vib in sau mode
+#include <soc/oppo/boot_mode.h>
+#endif
 
 #define QPNP_IRQ_FLAGS	(IRQF_TRIGGER_RISING | \
 			IRQF_TRIGGER_FALLING | \
@@ -328,6 +332,11 @@ struct qpnp_hap {
 	u16 drive_period_code_max_limit;
 	u16 drive_period_code_min_limit;
 	u32 timeout_ms;
+
+#ifdef VENDOR_EDIT
+//Added by Tong.han@Bsp.group.Tp for vib min time setting,2015-07-07-07
+	u32 time_min;
+#endif/*VENDOR_EDIT*/
 	u32 time_required_to_generate_back_emf_us;
 	u32 vmax_mv;
 	u32 ilim_ma;
@@ -476,6 +485,10 @@ static int qpnp_hap_play(struct qpnp_hap *hap, int on)
 	u8 val;
 	int rc;
 
+#ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,add 2016/7/26 for vib
+	pr_err("vib on = %d\n",on);
+#endif/*VENDOR_EDIT*/
 	val = hap->reg_play;
 	if (on)
 		val |= QPNP_HAP_PLAY_EN;
@@ -1664,6 +1677,11 @@ static void qpnp_hap_td_enable(struct timed_output_dev *dev, int value)
 	} else {
 		value = (value > hap->timeout_ms ?
 				 hap->timeout_ms : value);
+#ifdef VENDOR_EDIT
+//Added by Tong.han@Bsp.group.Tp for vib min time setting,2015-07-07-07
+		value = (value < hap->time_min ?
+				 hap->time_min : value);
+#endif/*VENDOR_EDIT*/		 
 		hap->state = 1;
 		hrtimer_start(&hap->hap_timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),
@@ -2125,7 +2143,18 @@ static int qpnp_hap_parse_dt(struct qpnp_hap *hap)
 		dev_err(&spmi->dev, "Unable to read timeout\n");
 		return rc;
 	}
-
+#ifdef VENDOR_EDIT
+//Added by Tong.han@Bsp.group.Tp for vib min time setting,2015-07-07-07
+	rc = of_property_read_u32(spmi->dev.of_node,
+			"qcom,vib-timemin-ms", &temp);
+	if (!rc) {
+		hap->time_min = temp;
+	} else if (rc != -EINVAL) {
+		dev_err(&spmi->dev, "Unable to read vib time_min\n");
+		hap->time_min = 0;
+	}
+#endif/*VENDOR_EDIT*/
+	
 	hap->act_type = QPNP_HAP_LRA;
 	rc = of_property_read_string(spmi->dev.of_node,
 			"qcom,actuator-type", &temp_str);
@@ -2367,6 +2396,15 @@ static int qpnp_haptic_probe(struct spmi_device *spmi)
 	struct regulator *vcc_pon;
 	int rc, i;
 
+	#ifdef VENDOR_EDIT
+	//rendong.shi@Bsp.drv,2016/04/16,add for  not enable vib in sau mode
+	if(MSM_BOOT_MODE__SAU == get_boot_mode())
+	{
+		pr_err("SAU mode should not enable vib");
+		return 0;
+	}
+	#endif
+	
 	hap = devm_kzalloc(&spmi->dev, sizeof(*hap), GFP_KERNEL);
 	if (!hap)
 		return -ENOMEM;

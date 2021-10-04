@@ -108,6 +108,10 @@ struct msm_actuator_ctrl_t {
 	struct msm_camera_gpio_conf *gconf;
 	struct msm_pinctrl_info pinctrl_info;
 	uint8_t cam_pinctrl_status;
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20160808 for [park lens]*/
+	struct msm_camera_i2c_reg_setting deinit_reg_setting;
+#endif
 };
 
 #endif

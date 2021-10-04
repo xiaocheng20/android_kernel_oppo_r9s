@@ -49,6 +49,27 @@
 
 #include <linux/msm-bus.h>
 
+#ifdef VENDOR_EDIT
+//wenbin.liu@BSP.CHG.Basic, 2016/08/23  
+//add for OPPO_DEBUG 
+//#define OPPO_TEST_DEBUG
+#ifdef OPPO_TEST_DEBUG
+
+#undef pr_debug
+#define pr_debug(fmt, ...) printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+
+#undef pr_info
+#define pr_info(fmt, ...) printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+
+#undef dev_info
+#define dev_info(dev, format, arg...) dev_printk(KERN_ERR, dev, format, ##arg)
+
+#undef dev_dbg
+#define dev_dbg(dev, format, arg...) dev_printk(KERN_ERR, dev, format, ##arg)
+
+#endif
+#endif /*VENDOR_EDIT*/
+
 #define MSM_USB_BASE	(motg->regs)
 #define MSM_USB_PHY_CSR_BASE (motg->phy_csr_regs)
 
@@ -96,10 +117,15 @@ module_param(lpm_disconnect_thresh , uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(lpm_disconnect_thresh,
 	"Delay before entering LPM on USB disconnect");
 
+
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/07 
+// Delete for QCMM  Patch   solve  BUG 872157		
 static bool floated_charger_enable;
 module_param(floated_charger_enable , bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(floated_charger_enable,
 	"Whether to enable floated charger");
+#endif /*VENDOR_EDIT*/
 
 /* by default debugging is enabled */
 static unsigned int enable_dbg_log = 1;
@@ -120,6 +146,18 @@ static DECLARE_COMPLETION(pmic_vbus_init);
 static struct msm_otg *the_msm_otg;
 static bool debug_bus_voting_enabled;
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157	
+static bool debug_floated_charger_enabled;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2017/04/13
+// Add for add otg id value change support
+extern void otg_enable_id_value(void);
+extern void otg_disable_id_value(void);
+#endif /*VENDOR_EDIT*/
 static struct regulator *hsusb_3p3;
 static struct regulator *hsusb_1p8;
 static struct regulator *hsusb_vdd;
@@ -131,6 +169,20 @@ static u32 bus_freqs[USB_NOC_NUM_VOTE][USB_NUM_BUS_CLOCKS]  /*bimc,snoc,pcnoc*/;
 static char bus_clkname[USB_NUM_BUS_CLOCKS][20] = {"bimc_clk", "snoc_clk",
 						"pcnoc_clk"};
 static bool bus_clk_rate_set;
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03
+// Add for otg switch. if otg_switch closed,  ID pin is always pull_up.
+static inline int oppo_test_id(struct msm_otg *motg)
+{
+	if(motg->otg_switch == false){
+		return 1;
+	}
+	else{
+		return test_bit(ID, &motg->inputs);
+	}
+}
+#endif /*VENDOR_EDIT*/
 
 static void dbg_inc(unsigned *idx)
 {
@@ -1168,7 +1220,14 @@ static int msm_otg_suspend(struct msm_otg *motg)
 	struct msm_otg_platform_data *pdata = motg->pdata;
 	int cnt;
 	bool host_bus_suspend, device_bus_suspend, dcp, prop_charger;
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
 	bool floated_charger, sm_work_busy;
+#else
+	bool sm_work_busy;
+#endif /*VENDOR_EDIT*/
+	
 	u32 cmd_val;
 	u32 portsc, config2;
 	u32 func_ctrl;
@@ -1179,19 +1238,38 @@ static int msm_otg_suspend(struct msm_otg *motg)
 	msm_otg_dbg_log_event(phy, "LPM ENTER START",
 			motg->inputs, phy->state);
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/10/14 modify for otg wake_lock not release
 	if (atomic_read(&motg->in_lpm))
 		return 0;
-
+#else
+	if (atomic_read(&motg->in_lpm)) {
+		pr_err("%s in_lpm, return\n", __func__);
+		return 0;
+	} else {
+		pr_err("%s not in_lpm\n", __func__);
+	}
+#endif /* VENDOR_EDIT */
 	cancel_delayed_work_sync(&motg->perf_vote_work);
 
 	disable_irq(motg->irq);
 	if (motg->phy_irq)
 		disable_irq(motg->phy_irq);
 lpm_start:
+	
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03 
+// Delete for otg switch 
 	host_bus_suspend = phy->otg->host && !test_bit(ID, &motg->inputs);
 	device_bus_suspend = phy->otg->gadget && test_bit(ID, &motg->inputs) &&
 		test_bit(A_BUS_SUSPEND, &motg->inputs) &&
 		motg->caps & ALLOW_LPM_ON_DEV_SUSPEND;
+#else
+	host_bus_suspend = phy->otg->host && !oppo_test_id(motg);
+	device_bus_suspend = phy->otg->gadget && oppo_test_id(motg) &&
+		test_bit(A_BUS_SUSPEND, &motg->inputs) &&
+		motg->caps & ALLOW_LPM_ON_DEV_SUSPEND;	
+#endif /*VENDOR_EDIT*/
 
 	if (host_bus_suspend)
 		msm_otg_perf_vote_update(motg, false);
@@ -1201,7 +1279,11 @@ lpm_start:
 	 */
 	dcp = (motg->chg_type == USB_DCP_CHARGER) && !motg->is_ext_chg_dcp;
 	prop_charger = motg->chg_type == USB_PROPRIETARY_CHARGER;
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic 2016/11/10
+// Delete for QCMM  Patch   solve  BUG 872157
 	floated_charger = motg->chg_type == USB_FLOATED_CHARGER;
+#endif /*VENDOR_EDIT*/
 
 	/* !BSV, but its handling is in progress by otg sm_work */
 	sm_work_busy = !test_bit(B_SESS_VLD, &motg->inputs) &&
@@ -1231,13 +1313,25 @@ lpm_start:
 	 */
 
 	if ((test_bit(B_SESS_VLD, &motg->inputs) && !device_bus_suspend &&
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Delete for QCMM  Patch   solve  BUG 872157
 		!dcp && !motg->is_ext_chg_dcp && !prop_charger &&
 			!floated_charger) || sm_work_busy) {
+#else
+		!dcp && !motg->is_ext_chg_dcp && !prop_charger) ||
+			sm_work_busy) {
+#endif /*VENDOR_EDIT*/		
+
 		msm_otg_dbg_log_event(phy, "LPM ENTER ABORTED",
 				motg->inputs, motg->chg_type);
 		enable_irq(motg->irq);
 		if (motg->phy_irq)
 			enable_irq(motg->phy_irq);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/10/14 modify for otg wake_lock not release
+		pr_err("%s EBUSY, return\n", __func__);
+#endif /* VENDOR_EDIT */
 		return -EBUSY;
 	}
 
@@ -1301,7 +1395,12 @@ phcd_retry:
 		}
 
 		if (device_bus_suspend) {
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/10/14 modify for otg wake_lock not release
 			dev_dbg(phy->dev, "PHY suspend aborted\n");
+#else
+			dev_err(phy->dev, "PHY suspend aborted\n");
+#endif /* VENDOR_EDIT */
 			ret = -EBUSY;
 			goto phy_suspend_fail;
 		} else {
@@ -1498,7 +1597,13 @@ phcd_retry:
 		motg->err_event_seen = false;
 		if (motg->vbus_state != test_bit(B_SESS_VLD, &motg->inputs))
 			msm_otg_set_vbus_state(motg->vbus_state);
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03 
+// Delete for otg switch 
 		if (motg->id_state != test_bit(ID, &motg->inputs))
+#else
+		if (motg->id_state != oppo_test_id(motg))
+#endif /*VENDOR_EDIT*/
 			msm_id_status_w(&motg->id_status_work.work);
 	}
 
@@ -1706,8 +1811,14 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	else if (motg->chg_type == USB_CDP_CHARGER)
 		charger_type = POWER_SUPPLY_TYPE_USB_CDP;
 	else if (motg->chg_type == USB_DCP_CHARGER ||
-			motg->chg_type == USB_PROPRIETARY_CHARGER ||
-			motg->chg_type == USB_FLOATED_CHARGER)
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157 
+		motg->chg_type == USB_PROPRIETARY_CHARGER ||
+		motg->chg_type == USB_FLOATED_CHARGER)
+#else
+		motg->chg_type == USB_PROPRIETARY_CHARGER)
+#endif /*VENDOR_EDIT*/
 		charger_type = POWER_SUPPLY_TYPE_USB_DCP;
 	else
 		charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
@@ -1737,7 +1848,12 @@ static int msm_otg_notify_power_supply(struct msm_otg *motg, unsigned mA)
 			goto psy_error;
 		if (power_supply_set_current_limit(psy, 1000*mA))
 			goto psy_error;
+#ifndef VENDOR_EDIT
+//Modified by Tong.han@Bsp.group.Tp for fixing the disconnect issue swtich the charger and the mtp,2015-2-28
 	} else if (motg->cur_power >= 0 && (mA == 0 || mA == 2)) {
+#else
+	} else if (motg->cur_power >= 0 && (mA == 0 || mA == 2) && (motg->chg_type == USB_INVALID_CHARGER)){
+#endif /*VENDOR_EDIT*/
 		/* Disable charging */
 		if (power_supply_set_online(psy, false))
 			goto psy_error;
@@ -2003,6 +2119,11 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 			pr_err("unable to enable vbus_otg\n");
 			return;
 		}
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+		motg->otg_online = true;
+#endif /*VENDOR_EDIT*/
 		vbus_is_on = true;
 	} else {
 		ret = regulator_disable(vbus_otg);
@@ -2011,8 +2132,18 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 			return;
 		}
 		msm_otg_notify_host_mode(motg, on);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+		motg->otg_online = false;
+#endif /*VENDOR_EDIT*/		
 		vbus_is_on = false;
 	}
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	pr_err("%s:otg_online=%d,vbus_is_on=%d\n",__func__,motg->otg_online,vbus_is_on);	
+#endif /*VENDOR_EDIT*/			
 }
 
 static int msm_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
@@ -2469,7 +2600,13 @@ static const char *chg_to_string(enum usb_chg_type chg_type)
 	case USB_DCP_CHARGER:		return "USB_DCP_CHARGER";
 	case USB_CDP_CHARGER:		return "USB_CDP_CHARGER";
 	case USB_PROPRIETARY_CHARGER:	return "USB_PROPRIETARY_CHARGER";
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
 	case USB_FLOATED_CHARGER:	return "USB_FLOATED_CHARGER";
+#else
+	case USB_UNSUPPORTED_CHARGER:	return "USB_UNSUPPORTED_CHARGER";
+#endif /*VENDOR_EDIT*/
 	default:			return "INVALID_CHARGER";
 	}
 }
@@ -2516,6 +2653,11 @@ static void msm_chg_detect_work(struct work_struct *w)
 		} else {
 			delay = MSM_CHG_DCD_POLL_TIME;
 		}
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/07
+// Add for CHG_TYPE Detection Log
+		pr_err("%s: CHG_TYPE dcd=%d,tmout=%d,chg_state=%d\n",__func__,is_dcd,tmout,motg->chg_state);
+#endif /*VENDOR_EDIT*/
 		break;
 	case USB_CHG_STATE_DCD_DONE:
 		vout = msm_chg_check_primary_det(motg);
@@ -2534,15 +2676,34 @@ static void msm_chg_detect_work(struct work_struct *w)
 		} else { /* DM < VDAT_REF || DM > VLGC */
 			if (line_state) /* DP > VLGC or/and DM > VLGC */
 				motg->chg_type = USB_PROPRIETARY_CHARGER;
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
 			else if (!dcd && floated_charger_enable)
 				motg->chg_type = USB_FLOATED_CHARGER;
 			else
 				motg->chg_type = USB_SDP_CHARGER;
+#else
+			else if (!dcd) {
+				if (motg->pdata->enable_floated_charger == FLOATING_AS_DCP)
+					motg->chg_type = USB_DCP_CHARGER;
+				else if (motg->pdata->enable_floated_charger == FLOATING_AS_INVALID)
+					motg->chg_type =USB_UNSUPPORTED_CHARGER;
+			} else {
+				motg->chg_type = USB_SDP_CHARGER;
+			}
+#endif /*VENDOR_EDIT*/
+
 
 			motg->chg_state = USB_CHG_STATE_DETECTED;
 			delay = 0;
 		}
-		break;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/07
+// Add for CHG_TYPE Detection Log
+		pr_err("%s : vout = %d,line_state = %d,vlgc = %d,inputs = %ld,chg_type = %d\n",__func__,vout,line_state,dm_vlgc,motg->inputs,motg->chg_type);	
+#endif /*VENDOR_EDIT*/		
+		break;				
 	case USB_CHG_STATE_PRIMARY_DONE:
 		vout = msm_chg_check_secondary_det(motg);
 		if (vout)
@@ -2694,8 +2855,15 @@ static void msm_otg_init_sm(struct msm_otg *motg)
 	}
 	msm_otg_dbg_log_event(&motg->phy, "SM INIT", pdata->mode, motg->inputs);
 	if (motg->id_state != USB_ID_GROUND)
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03
+// Delete for otg switch
 		motg->id_state = (test_bit(ID, &motg->inputs)) ? USB_ID_FLOAT :
 							USB_ID_GROUND;
+#else
+		motg->id_state = (oppo_test_id(motg)) ? USB_ID_FLOAT :
+							USB_ID_GROUND;	
+#endif /*VENDOR_EDIT*/
 }
 
 static void msm_otg_wait_for_ext_chg_done(struct msm_otg *motg)
@@ -2739,6 +2907,46 @@ do_wait:
 	}
 }
 
+#ifdef VENDOR_EDIT
+//wenbin.liu@BSP.CHG.Basic, 2016/08/23  
+//add for identify non_standard charger 	 modify  for QCMM  Patch   solve  BUG 872157     2016/11/10
+static void msm_chg_check_dcd_flchg(struct msm_otg *motg) 
+{ 
+	enum floated_chg_type floated_chg = motg->pdata->enable_floated_charger;
+	struct usb_otg *otg = motg->phy.otg;
+	bool check_dcd;
+
+	/*	3342
+	* Perform DCD for external charger detection only	3343
+	* if FLOATING charger detection is enabled and needed. 3344
+	*/
+
+	if (!motg->is_ext_chg_detected ||
+			motg->pdata->enable_floated_charger
+			== FLOATING_AS_SDP)
+		return;
+
+	pm_runtime_get_sync(otg->phy->dev);
+	msm_chg_block_on(motg); 
+	msm_chg_enable_dcd(motg); 
+	usleep_range(10000, 12000); 
+	check_dcd = msm_chg_check_dcd(motg);
+	if (!check_dcd) { 
+		if (floated_chg == FLOATING_AS_DCP)
+			motg->chg_type = USB_DCP_CHARGER;
+		else if (floated_chg == FLOATING_AS_INVALID)
+			motg->chg_type = USB_UNSUPPORTED_CHARGER;
+		pr_err("CHG_TYPE : NON_Standard Charger !\n");
+	} 
+	msm_chg_disable_dcd(motg); 
+	msm_chg_block_off(motg); 
+	pr_err("[%s] CHG_TYPE : Sec_Detect Type = %d, DCD = %d\n",__func__,motg->chg_type,check_dcd);
+	msm_otg_dbg_log_event(&motg->phy, "FLCHG:",check_dcd, motg->chg_type);
+	pm_runtime_mark_last_busy(otg->phy->dev);
+	pm_runtime_put_autosuspend(otg->phy->dev); 
+} 
+#endif /*VENDOR_EDIT*/
+
 static void msm_otg_sm_work(struct work_struct *w)
 {
 	struct msm_otg *motg = container_of(w, struct msm_otg, sm_work);
@@ -2777,8 +2985,17 @@ static void msm_otg_sm_work(struct work_struct *w)
 
 		msm_otg_init_sm(motg);
 		otg->phy->state = OTG_STATE_B_IDLE;
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03
+// Delete for otg switch 
 		if (!test_bit(B_SESS_VLD, &motg->inputs) &&
-				test_bit(ID, &motg->inputs)) {
+				test_bit(ID, &motg->inputs)) 	
+#else
+		if (!test_bit(B_SESS_VLD, &motg->inputs) &&
+				oppo_test_id(motg))		
+#endif /*VENDOR_EDIT*/
+
+		{
 			msm_otg_dbg_log_event(&motg->phy,
 				"PM RUNTIME: UNDEF PUT",
 				get_pm_runtime_counter(otg->phy->dev), 0);
@@ -2788,7 +3005,14 @@ static void msm_otg_sm_work(struct work_struct *w)
 		pm_runtime_put(otg->phy->dev);
 		/* FALL THROUGH */
 	case OTG_STATE_B_IDLE:
-		if (!test_bit(ID, &motg->inputs) && otg->host) {
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03
+// Delete for otg switch 
+		if (!test_bit(ID, &motg->inputs) && otg->host) 
+#else
+		if (!oppo_test_id(motg) && otg->host) 
+#endif /*VENDOR_EDIT*/		
+		{
 			pr_debug("!id\n");
 			msm_otg_dbg_log_event(&motg->phy, "!ID",
 					motg->inputs, otg->phy->state);
@@ -2819,16 +3043,55 @@ static void msm_otg_sm_work(struct work_struct *w)
 						otg->phy->state =
 							OTG_STATE_B_CHARGER;
 					break;
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
 				case USB_FLOATED_CHARGER:
 					msm_otg_notify_charger(motg,
 							IDEV_CHG_MAX);
 					otg->phy->state = OTG_STATE_B_CHARGER;
 					break;
+#else
+				case USB_UNSUPPORTED_CHARGER:
+					msm_otg_notify_charger(motg, 0);
+					if (!motg->is_ext_chg_dcp)
+						otg->phy->state = OTG_STATE_B_CHARGER;
+					break;
+#endif /*VENDOR_EDIT*/
 				case USB_CDP_CHARGER:
 					msm_otg_notify_charger(motg,
 							IDEV_CHG_MAX);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/09
+// Add for CDP_Port would not stop sm work  BugID 875492
+					pm_runtime_get_sync(otg->phy->dev);
+					msm_otg_start_peripheral(otg, 1);
+					otg->phy->state =
+						OTG_STATE_B_PERIPHERAL;
+					mod_timer(&motg->chg_check_timer,
+							CHG_RECHECK_DELAY);
+					break;
+#endif /*VENDOR_EDIT*/
 					/* fall through */
 				case USB_SDP_CHARGER:
+					
+#ifdef VENDOR_EDIT
+//wenbin.liu@BSP.CHG.Basic, 2016/08/23  
+//add for identify non_standard charger  
+					msm_chg_check_dcd_flchg(motg); 
+					/* 
+					* If connected charger is not SDP 
+					* then queue the state machine work to 
+					* detect the floating charger as 
+					* DCP or Invalid. 
+					*/ 
+					if (motg->chg_type != USB_SDP_CHARGER) { 
+						work = 1; 
+						break; 
+					} 
+					msm_otg_dbg_log_event( &motg->phy, "SDP CHARGER", 0, 0); 
+#endif /*VENDOR_EDIT*/	
+
 					pm_runtime_get_sync(otg->phy->dev);
 					msm_otg_start_peripheral(otg, 1);
 					otg->phy->state =
@@ -2940,7 +3203,14 @@ static void msm_otg_sm_work(struct work_struct *w)
 		}
 		break;
 	case OTG_STATE_A_HOST:
-		if (test_bit(ID, &motg->inputs)) {
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03 
+// Delete for otg switch 
+		if (test_bit(ID, &motg->inputs))
+#else
+		if (oppo_test_id(motg))
+#endif /*VENDOR_EDIT*/		 
+		{
 			msm_otg_start_host(otg, 0);
 			otg->phy->state = OTG_STATE_B_IDLE;
 			work = 1;
@@ -3037,12 +3307,25 @@ static void msm_otg_set_vbus_state(int online)
 		pr_debug("PMIC: BSV clear\n");
 		msm_otg_dbg_log_event(&motg->phy, "PMIC: BSV CLEAR",
 				init, motg->inputs);
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+		motg->is_ext_chg_detected = false;
+#endif /*VENDOR_EDIT*/		
 		if (!test_and_clear_bit(B_SESS_VLD, &motg->inputs) && init)
 			return;
 	}
 
 	/* do not queue state m/c work if id is grounded */
-	if (!test_bit(ID, &motg->inputs)) {
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03 
+// Delete for otg switch 
+	if (!test_bit(ID, &motg->inputs))
+#else
+	if (!oppo_test_id(motg))
+#endif /*VENDOR_EDIT*/
+	 
+	{
 		/*
 		 * state machine work waits for initial VBUS
 		 * completion in UNDEFINED state.  Process
@@ -3077,6 +3360,13 @@ out:
 			motg->chg_state = USB_CHG_STATE_UNDEFINED;
 			motg->chg_type = USB_INVALID_CHARGER;
 			msm_otg_notify_charger(motg, 0);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/10/22 add for msm_otg wake_lock issue
+			if (!atomic_read(&motg->in_lpm)) {
+				pr_err("chg_dcp out, not in_lpm, force msm_otg_suspend\n");
+				msm_otg_suspend(motg);
+			}
+#endif /* VENDOR_EDIT */
 		}
 		return;
 	}
@@ -3269,9 +3559,15 @@ static ssize_t msm_otg_mode_write(struct file *file, const char __user *ubuf,
 	default:
 		goto out;
 	}
-
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/03 
+// Delete for otg switch 
 	motg->id_state = (test_bit(ID, &motg->inputs)) ? USB_ID_FLOAT :
-							USB_ID_GROUND;
+						USB_ID_GROUND;
+#else
+	motg->id_state = (oppo_test_id(motg)) ? USB_ID_FLOAT :
+						USB_ID_GROUND;	
+#endif /*VENDOR_EDIT*/
 	queue_work(motg->otg_wq, &motg->sm_work);
 out:
 	return status;
@@ -3397,6 +3693,55 @@ const struct file_operations msm_otg_dbg_buff_fops = {
 	.release = single_release,
 };
 
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+static int msm_otg_floated_charger_show(struct seq_file *s, void *unused)
+{
+	if (debug_floated_charger_enabled)
+		seq_puts(s, "enabled\n");
+	else
+		seq_puts(s, "disabled\n");
+	return 0;
+}
+
+static int msm_otg_floated_charger_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, msm_otg_floated_charger_show,
+				inode->i_private);
+}
+
+static ssize_t msm_otg_floated_charger_write(struct file *file,
+	const char __user *ubuf, size_t count, loff_t *ppos)
+{
+	char buf[8];
+	struct seq_file *s = file->private_data;
+	struct msm_otg *motg = s->private;
+
+	memset(buf, 0x00, sizeof(buf));
+
+	if (copy_from_user(&buf, ubuf, min_t(size_t, sizeof(buf) - 1, count)))
+		return -EFAULT;
+
+	if (!strncmp(buf, "enable", 6))
+		debug_floated_charger_enabled = true;
+	else
+		debug_floated_charger_enabled = false;
+
+	motg->pdata->enable_floated_charger = debug_floated_charger_enabled;
+	return count;
+}
+
+const struct file_operations msm_otg_floated_charger_fops = {
+	.open = msm_otg_floated_charger_open,
+	.read = seq_read,
+	.write = msm_otg_floated_charger_write,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+#endif /*VENDOR_EDIT*/
+
 static int
 otg_get_prop_usbin_voltage_now(struct msm_otg *motg)
 {
@@ -3494,6 +3839,18 @@ static int otg_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_USB_OTG:
 		val->intval = !motg->id_state;
 		break;
+		
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
+		val->intval = motg->otg_switch;
+		break;
+	case POWER_SUPPLY_PROP_OTG_ONLINE:
+		val->intval = motg->otg_online;
+		break;		
+#endif /*VENDOR_EDIT*/
+		
 	default:
 		return -EINVAL;
 	}
@@ -3506,13 +3863,42 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 {
 	struct msm_otg *motg = container_of(psy, struct msm_otg, usb_psy);
 	struct msm_otg_platform_data *pdata = motg->pdata;
+	
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	static bool otg_present = false;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/07
+// Add for Dead Battery CHG_TYPE Detection
+	static int charger_sdp = 0;
+#endif /*VENDOR_EDIT*/
 
 	msm_otg_dbg_log_event(&motg->phy, "SET PWR PROPERTY", psp, psy->type);
 	switch (psp) {
-	case POWER_SUPPLY_PROP_USB_OTG:
+	case POWER_SUPPLY_PROP_USB_OTG:		
+		
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Delete for otg switch 
 		motg->id_state = val->intval ? USB_ID_GROUND : USB_ID_FLOAT;
 		queue_delayed_work(motg->otg_wq, &motg->id_status_work, 0);
+		break;	
+#else
+		otg_present = val->intval ? true : false;
+		if(motg->otg_switch){
+			motg->id_state = val->intval ? USB_ID_GROUND : USB_ID_FLOAT;
+		}
+		else{
+			motg->id_state = USB_ID_FLOAT;			
+		}
+		pr_err("[%s]:id_state=%d,otg_switch=%d\n",__func__,motg->id_state,motg->otg_switch);
+		queue_delayed_work(motg->otg_wq, &motg->id_status_work, 0);
 		break;
+#endif /*VENDOR_EDIT*/
+
 	/* PMIC notification for DP DM state */
 	case POWER_SUPPLY_PROP_DP_DM:
 		msm_otg_pmic_dp_dm(motg, val->intval);
@@ -3570,7 +3956,23 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 
 		switch (psy->type) {
 		case POWER_SUPPLY_TYPE_USB:
+			
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/07 
+// Delete for Dead Battery CHG_TYPE Detection 
 			motg->chg_type = USB_SDP_CHARGER;
+#else
+			if(charger_sdp < 2){
+				motg->chg_type = USB_INVALID_CHARGER;
+				charger_sdp++;
+			}
+			else{
+				motg->chg_type = USB_SDP_CHARGER;
+				charger_sdp = 2;
+			}
+			pr_err("%s: Pmic-SDP charger_sdp = %d,chg_type = %d\n",__func__,charger_sdp,motg->chg_type);
+#endif /*VENDOR_EDIT*/
+
 			break;
 		case POWER_SUPPLY_TYPE_USB_DCP:
 			motg->chg_type = USB_DCP_CHARGER;
@@ -3591,9 +3993,22 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 		}
 
 		if (motg->chg_type != USB_INVALID_CHARGER) {
+#ifdef VENDOR_EDIT
+//wenbin.liu@BSP.CHG.Basic, 2016/08/23  
+//add for identify non_standard charger    QCMM  Patch   solve  BUG 872157
+			motg->is_ext_chg_detected = true;
+#endif /*VENDOR_EDIT*/			
+
 			if (motg->chg_type == USB_DCP_CHARGER)
 				motg->is_ext_chg_dcp = true;
 			motg->chg_state = USB_CHG_STATE_DETECTED;
+			
+#ifdef VENDOR_EDIT
+//wenbin.liu@BSP.CHG.Basic, 2016/08/23  
+//add for identify non_standard charger   QCMM  Patch   solve  BUG 872157
+			if (motg->chg_type == USB_SDP_CHARGER) 
+				msm_otg_notify_charger(motg, 2);
+#endif /*VENDOR_EDIT*/				
 		}
 
 		dev_dbg(motg->phy.dev, "%s: charger type = %s\n", __func__,
@@ -3604,11 +4019,44 @@ static int otg_power_set_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_HEALTH:
 		motg->usbin_health = val->intval;
 		break;
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
+		motg->otg_switch = val->intval;
+		if(motg->otg_switch){
+			otg_enable_id_value();
+			if(otg_present){
+				motg->id_state = USB_ID_GROUND;
+				pr_err("[%s](otg_switch):id_state=%d,otg_switch=%d,otg_online=%d\n",__func__,motg->id_state,motg->otg_switch,motg->otg_online);
+				queue_delayed_work(motg->otg_wq, &motg->id_status_work, 0);
+			}
+		}
+		else{
+			otg_disable_id_value();
+			motg->otg_online = false;
+			if(!motg->id_state){
+				motg->id_state = USB_ID_FLOAT;
+				pr_err("[%s](otg_switch):id_state=%d,otg_switch=%d,otg_online=%d\n",__func__,motg->id_state,motg->otg_switch,motg->otg_online);
+				queue_delayed_work(motg->otg_wq, &motg->id_status_work, 0);			
+			}
+		}
+		break;	
+#endif /*VENDOR_EDIT*/
+
 	default:
 		return -EINVAL;
 	}
-
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02 
+// Delete for otg switch not update usb state 
 	power_supply_changed(&motg->usb_psy);
+#else
+	if(psp != POWER_SUPPLY_PROP_OTG_SWITCH)
+		power_supply_changed(&motg->usb_psy);
+#endif /*VENDOR_EDIT*/
+
 	return 0;
 }
 
@@ -3624,6 +4072,7 @@ static int otg_power_property_is_writeable_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_DP_DM:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_USB_OTG:
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
 		return 1;
 	default:
 		break;
@@ -3648,6 +4097,14 @@ static enum power_supply_property otg_pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_DP_DM,
 	POWER_SUPPLY_PROP_USB_OTG,
+	
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	POWER_SUPPLY_PROP_OTG_SWITCH,
+	POWER_SUPPLY_PROP_OTG_ONLINE,
+#endif /*VENDOR_EDIT*/
+
 };
 
 const struct file_operations msm_otg_bus_fops = {
@@ -3717,6 +4174,18 @@ static int msm_otg_debugfs_init(struct msm_otg *motg)
 		debugfs_remove_recursive(msm_otg_dbg_root);
 		return -ENODEV;
 	}
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+	msm_otg_dentry = debugfs_create_file("floated_charger_enable", S_IRUGO |
+				S_IWUSR, msm_otg_dbg_root, motg, &msm_otg_floated_charger_fops);
+	if (!msm_otg_dentry) {
+		debugfs_remove_recursive(msm_otg_dbg_root);
+		return -ENODEV;
+	}
+#endif /*VENDOR_EDIT*/
+	
 	return 0;
 }
 
@@ -4255,6 +4724,15 @@ struct msm_otg_platform_data *msm_otg_dt_to_pdata(struct platform_device *pdev)
 
 	pdata->enable_sdp_typec_current_limit = of_property_read_bool(node,
 					"qcom,enable-sdp-typec-current-limit");
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+	of_property_read_u32(node, "qcom,floated-charger-enable",
+				&pdata->enable_floated_charger);
+	if (pdata->enable_floated_charger == FLOATING_AS_DCP ||
+		pdata->enable_floated_charger == FLOATING_AS_INVALID)
+		debug_floated_charger_enabled = true;
+#endif /*VENDOR_EDIT*/
 	return pdata;
 }
 

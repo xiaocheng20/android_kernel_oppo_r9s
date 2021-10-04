@@ -21,6 +21,12 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/gpio.h>
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+extern bool oppo_vooc_adapter_update_is_tx_gpio(unsigned long gpio_num);
+extern bool oppo_vooc_adapter_update_is_rx_gpio(unsigned long gpio_num);
+#endif /* VENDOR_EDIT */
+
 /* Implementation infrastructure for GPIO interfaces.
  *
  * The GPIO programming interface allows for inlining speed-critical
@@ -1137,8 +1143,24 @@ static bool _gpiod_get_raw_value(const struct gpio_desc *desc)
 
 	chip = desc->chip;
 	offset = gpio_chip_hwgpio(desc);
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
 	value = chip->get ? chip->get(chip, offset) : false;
 	trace_gpio_value(desc_to_gpio(desc), 1, value);
+#else
+	if(oppo_vooc_adapter_update_is_rx_gpio(desc_to_gpio(desc))) {
+		if(chip->get_oppo_vooc) {
+			value = chip->get_oppo_vooc(chip, offset);
+		} else {
+			pr_err("%s get_oppo_vooc not exist\n", __func__);
+			value = chip->get ? chip->get(chip, offset) : 0;
+		}
+	} else {
+		value = chip->get ? chip->get(chip, offset) : false;
+		trace_gpio_value(desc_to_gpio(desc), 1, value);
+	}
+#endif /* VENDOR_EDIT */
+
 	return value;
 }
 
@@ -1247,13 +1269,36 @@ static void _gpiod_set_raw_value(struct gpio_desc *desc, bool value)
 	struct gpio_chip	*chip;
 
 	chip = desc->chip;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
 	trace_gpio_value(desc_to_gpio(desc), 0, value);
+#else
+	if(oppo_vooc_adapter_update_is_tx_gpio(desc_to_gpio(desc)) == false) {
+		trace_gpio_value(desc_to_gpio(desc), 0, value);
+	}
+#endif /* VENDOR_EDIT */
 	if (test_bit(FLAG_OPEN_DRAIN, &desc->flags))
 		_gpio_set_open_drain_value(desc, value);
 	else if (test_bit(FLAG_OPEN_SOURCE, &desc->flags))
 		_gpio_set_open_source_value(desc, value);
-	else
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+	else 
 		chip->set(chip, gpio_chip_hwgpio(desc), value);
+#else
+	else {
+		if(oppo_vooc_adapter_update_is_tx_gpio(desc_to_gpio(desc))) {
+			if(chip->set_oppo_vooc) {
+				chip->set_oppo_vooc(chip, gpio_chip_hwgpio(desc), value);
+			} else {
+				pr_err("%s set_oppo_vooc not exist\n", __func__);
+				chip->set(chip, gpio_chip_hwgpio(desc), value);
+			}
+		} else {
+			chip->set(chip, gpio_chip_hwgpio(desc), value);
+		}
+	}
+#endif /* VENDOR_EDIT */
 }
 
 /**

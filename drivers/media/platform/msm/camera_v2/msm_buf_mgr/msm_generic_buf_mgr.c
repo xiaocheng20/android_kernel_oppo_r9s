@@ -106,6 +106,7 @@ static int32_t msm_buf_mngr_get_buf_by_idx(struct msm_buf_mngr_device *dev,
 		pr_err("%s:No mem\n", __func__);
 		return -ENOMEM;
 	}
+
 	if (!buf_info) {
 		kfree(new_entry);
 		return -EIO;
@@ -554,8 +555,7 @@ static long msm_buf_mngr_subdev_ioctl(struct v4l2_subdev *sd,
 				sizeof(struct msm_buf_mngr_info))) {
 				return -EFAULT;
 			}
-			MSM_CAM_GET_IOCTL_ARG_PTR(&k_ioctl.ioctl_ptr,
-				&buf_info, sizeof(void *));
+			k_ioctl.ioctl_ptr = (uintptr_t)&buf_info;
 			argp = &k_ioctl;
 			rc = msm_cam_buf_mgr_ops(cmd, argp);
 			}

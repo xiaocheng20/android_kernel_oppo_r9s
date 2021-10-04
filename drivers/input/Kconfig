@@ -215,6 +215,13 @@ source "drivers/input/serio/Kconfig"
 
 source "drivers/input/gameport/Kconfig"
 
+source "drivers/input/touchscreen/synaptics_oppo/Kconfig"
+
+#ifdef VENDOR_EDIT
+#Added by wanghao@Bsp.group.Tp for goodix_ic driver,2016-08-12 
+source "drivers/input/touchscreen/Goodix_gt5688/Kconfig"
+#endif
+
 endmenu
 
 endmenu

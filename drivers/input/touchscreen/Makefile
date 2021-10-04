@@ -91,3 +91,14 @@ obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)		+= synaptics_i2c_rmi4.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_RMI4_DEV)	+= synaptics_rmi_dev.o
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX_FW_UPDATE) 	+= synaptics_fw_update.o
 obj-$(CONFIG_TOUCHSCREEN_GT9XX)		+= gt9xx/
+#ifdef VENDOR_EDIT
+#Tong.han@Bsp.group.Tp,2016-08-12,Added for common touchpanel driver 
+obj-$(CONFIG_TOUCHPANEL_OPPO) += oppo_touchscreen/
+#endif
+#ifdef VENDOR_EDIT//Added by Wanghao@Bsp.group.Tp for synaptics_ic driver,2016-06-09 
+obj-$(CONFIG_SYNAPTICS_OPPO) += synaptics_oppo/
+#endif
+
+#ifdef VENDOR_EDIT//Added by Wanghao@Bsp.group.Tp for goodix_ic driver,2016-08-08
+#obj-$(CONFIG_GT5688_TOUCHPANEL_DRIVER) += Goodix_gt5688/
+#endif

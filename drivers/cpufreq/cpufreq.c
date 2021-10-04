@@ -1127,6 +1127,12 @@ static void cpufreq_policy_free(struct cpufreq_policy *policy)
 {
 	free_cpumask_var(policy->related_cpus);
 	free_cpumask_var(policy->cpus);
+#ifdef VENDOR_EDIT
+	/* fangpan@Swdp.shanghai 2016-11-25 fix process_one_work corruption issue*/
+	if(&policy->update) {
+		cancel_work_sync(&policy->update);
+	}
+#endif
 	kfree(policy);
 }
 

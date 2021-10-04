@@ -27,7 +27,12 @@
 #include <linux/iommu.h>
 #include <linux/platform_device.h>
 #include <media/v4l2-fh.h>
-
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20150714 start for print camera time*/
+#include <linux/time.h>
+#include <linux/rtc.h>
+#endif
+#include <linux/mutex.h>
 #include "camera.h"
 #include "msm.h"
 #include "msm_vb2.h"
@@ -618,8 +623,24 @@ static int camera_v4l2_open(struct file *filep)
 	struct v4l2_event event;
 	struct msm_video_device *pvdev = video_drvdata(filep);
 	unsigned int opn_idx, idx;
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20150714 start for print camera time*/
+	struct timespec ts;
+	struct rtc_time tm;
+#endif
 	BUG_ON(!pvdev);
 
+	mutex_lock(&pvdev->open_mutex);
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20150714 start for print camera time*/
+	if (!atomic_read(&pvdev->opened)) {
+		getnstimeofday(&ts);
+		rtc_time_to_tm(ts.tv_sec, &tm);
+		pr_info("%s: %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n", __func__,
+			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
+	}
+ #endif
 	rc = camera_v4l2_fh_open(filep);
 	if (rc < 0) {
 		pr_err("%s : camera_v4l2_fh_open failed Line %d rc %d\n",
@@ -690,6 +711,7 @@ static int camera_v4l2_open(struct file *filep)
 	idx |= (1 << find_first_zero_bit((const unsigned long *)&opn_idx,
 				MSM_CAMERA_STREAM_CNT_BITS));
 	atomic_cmpxchg(&pvdev->opened, opn_idx, idx);
+	mutex_unlock(&pvdev->open_mutex);
 
 	return rc;
 
@@ -704,6 +726,7 @@ stream_fail:
 vb2_q_fail:
 	camera_v4l2_fh_release(filep);
 fh_open_fail:
+	mutex_unlock(&pvdev->open_mutex);
 	return rc;
 }
 
@@ -729,10 +752,17 @@ static int camera_v4l2_close(struct file *filep)
 	struct camera_v4l2_private *sp = fh_to_private(filep->private_data);
 	unsigned int opn_idx, mask;
 	struct msm_session *session;
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20150714 start for print camera time*/
+	struct timespec ts;
+	struct rtc_time tm;
+#endif
 	BUG_ON(!pvdev);
 	session = msm_session_find(pvdev->vdev->num);
 	if (WARN_ON(!session))
 		return -EIO;
+
+	mutex_lock(&pvdev->open_mutex);
 
 	mutex_lock(&session->close_lock);
 	opn_idx = atomic_read(&pvdev->opened);
@@ -775,6 +805,17 @@ static int camera_v4l2_close(struct file *filep)
 	}
 
 	camera_v4l2_fh_release(filep);
+#ifdef VENDOR_EDIT
+/*Added by Jinshui.Liu@Camera 20150714 start for print camera time*/
+	if (atomic_read(&pvdev->opened) == 0) {
+		getnstimeofday(&ts);
+		rtc_time_to_tm(ts.tv_sec, &tm);
+		pr_info("%s: %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n", __func__,
+			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
+	}
+#endif
+	mutex_unlock(&pvdev->open_mutex);
 
 	return 0;
 }
@@ -920,6 +961,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 #endif
 
 	*session = pvdev->vdev->num;
+	mutex_init(&pvdev->open_mutex);
 	atomic_set(&pvdev->opened, 0);
 	video_set_drvdata(pvdev->vdev, pvdev);
 	device_init_wakeup(&pvdev->vdev->dev, 1);

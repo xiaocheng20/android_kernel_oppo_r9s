@@ -2,7 +2,7 @@
  * Core MDSS framebuffer driver.
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2017, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -55,6 +55,16 @@
 #include "mdss_smmu.h"
 #include "mdss_mdp.h"
 
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/04/01  Add for 15009 lcd-backlight ctrl in factory mode START */
+#include <soc/oppo/oppo_project.h>
+#include <soc/oppo/boot_mode.h>
+//YongPeng.Yi@SWDP.MultiMedia, 2016/05/17,  Add for exception log
+#include <soc/oppo/mmkey_log.h>
+#include "mdss_dsi.h"
+static int boot_mode = 0;
+#endif /*VENDOR_EDIT*/
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -77,6 +87,18 @@
 
 static struct fb_info *fbi_list[MAX_FBI_LIST];
 static int fbi_list_index;
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2015/06/03  Add for silence mode */
+int lcd_closebl_flag = 0;
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/11/26  Add for 15103 samsung video mode  */
+extern int lcd_dev;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT//Ziqing.GUO@ProDrv,add 2016.01.19 for share backlight level
+volatile unsigned int share_backlight_level = 0;
+#endif
 
 static u32 mdss_fb_pseudo_palette[16] = {
 	0x00000000, 0xffffffff, 0xffffffff, 0xffffffff,
@@ -761,6 +783,152 @@ static ssize_t mdss_fb_get_dfps_mode(struct device *dev,
 	return ret;
 }
 
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/14  Add for ftm mode to shut down lcd */
+static ssize_t mdss_mdp_lcdoff_event(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+    struct fb_info *fbi = dev_get_drvdata(dev);
+    struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)fbi->par;
+       pr_err("%s YXQ mfd=0x%p\n", __func__, mfd);
+    if (!mfd)
+            return -ENODEV;
+#ifdef VENDOR_EDIT
+/* liuyan@Onlinerd.driver, 2014/10/14  Add for ftm sleep current too big */
+        if(is_project(OPPO_16017)&&(lcd_dev == LCD_16017_SAMSUNG_EA8064_FHD_VIDEO)){
+            return sprintf(buf,"mdss_fb_suspend_sub is called\n");
+       }
+        if(is_project(OPPO_16061))
+        {
+            mdss_fb_suspend_sub(mfd);
+            return sprintf(buf,"mdss_fb_suspend_sub is called\n");
+        }
+#endif /*CONFIG_VENDOR_EDIT*/
+    return mdss_fb_send_panel_event(mfd, MDSS_EVENT_PANEL_OFF, NULL);
+}
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+//YongPeng.Yi@SWDP.MultiMedia, 2016/05/26,  Add for esd check test
+extern void set_esd_mode(int level);
+static ssize_t mdss_get_esd(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+    set_esd_mode(0);
+    return sprintf(buf, "%d\n", 0);
+}
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/05/19  Add for close bl */
+static ssize_t mdss_get_closebl_flag(struct device *dev,
+                                struct device_attribute *attr, char *buf)
+{
+    printk(KERN_INFO "get closebl flag = %d\n",lcd_closebl_flag);
+    return sprintf(buf, "%d\n", lcd_closebl_flag);
+}
+
+static ssize_t mdss_set_closebl_flag(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    int closebl = 0;
+    sscanf(buf, "%du", &closebl);
+    pr_err("lcd_closebl_flag = %d\n",closebl);
+    if(1 != closebl)
+        lcd_closebl_flag = 0;
+    pr_err("mdss_set_closebl_flag = %d\n",lcd_closebl_flag);
+    return count;
+}
+
+extern void set_hbm_mode(int level);
+static ssize_t mdss_set_hbm(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    int level = 0;
+    sscanf(buf, "%du", &level);
+    set_hbm_mode(level);
+    return count;
+}
+
+extern int hbm_mode;
+
+static ssize_t mdss_get_hbm(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+    if(!(is_project(OPPO_16017)))
+        return 0;
+
+    printk(KERN_INFO "get hbm mode = %d\n", hbm_mode);
+
+    return sprintf(buf, "%d\n", hbm_mode);
+}
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+extern int set_cabc(int level);
+extern int cabc_mode;
+extern void set_hx8394f_cabc_mode(int level);
+extern int set_cabc_16027(int level);
+
+static ssize_t mdss_get_cabc(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+
+	printk(KERN_INFO "get cabc mode = %d\n",cabc_mode);
+
+    return sprintf(buf, "%d\n", cabc_mode);
+}
+
+static ssize_t mdss_set_cabc(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    int level = 0;
+
+    sscanf(buf, "%du", &level);
+    pr_info("%s cabc level = %d\n", __func__, level);
+
+    if(is_project(OPPO_16061)){
+        set_hx8394f_cabc_mode(level);
+    } else if (is_project(OPPO_16027)) {
+        set_cabc_16027(level);
+    }else{
+        set_cabc(level);
+    }
+    return count;
+}
+#endif
+
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-08-08, add for LBR */
+extern int set_lbr(void);
+extern int lbr_level;
+
+static ssize_t mdss_get_lbr(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	if(!(is_project(OPPO_16017))){
+		return 0;
+	}
+	printk(KERN_INFO "get lbr level = %d\n",lbr_level);
+
+    return sprintf(buf, "%d\n", lbr_level);
+}
+
+static ssize_t mdss_set_lbr(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    sscanf(buf, "%du", &lbr_level);
+	pr_err("%s YXQ level = %d\n", __func__, lbr_level);
+
+    set_lbr();
+    return count;
+}
+#endif
+
+
 static DEVICE_ATTR(msm_fb_type, S_IRUGO, mdss_fb_get_type, NULL);
 static DEVICE_ATTR(msm_fb_split, S_IRUGO | S_IWUSR, mdss_fb_show_split,
 					mdss_fb_store_split);
@@ -777,6 +945,23 @@ static DEVICE_ATTR(msm_fb_panel_status, S_IRUGO | S_IWUSR,
 	mdss_fb_get_panel_status, mdss_fb_force_panel_dead);
 static DEVICE_ATTR(msm_fb_dfps_mode, S_IRUGO | S_IWUSR,
 	mdss_fb_get_dfps_mode, mdss_fb_change_dfps_mode);
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/14  Add for ftm mode to shut down lcd */
+static DEVICE_ATTR(esd, S_IRUGO, mdss_get_esd, NULL);
+static DEVICE_ATTR(lcdoff, S_IRUGO, mdss_mdp_lcdoff_event, NULL);
+static DEVICE_ATTR(hbm, S_IRUGO|S_IWUSR, mdss_get_hbm, mdss_set_hbm);
+static DEVICE_ATTR(closebl, 0664, mdss_get_closebl_flag, mdss_set_closebl_flag);
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+static DEVICE_ATTR(cabc, S_IRUGO|S_IWUSR, mdss_get_cabc, mdss_set_cabc);
+#endif
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-08-08, add for LBR */
+static DEVICE_ATTR(lbr, S_IRUGO|S_IWUSR, mdss_get_lbr, mdss_set_lbr);
+#endif
+
+
 static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_type.attr,
 	&dev_attr_msm_fb_split.attr,
@@ -788,6 +973,22 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_msm_fb_thermal_level.attr,
 	&dev_attr_msm_fb_panel_status.attr,
 	&dev_attr_msm_fb_dfps_mode.attr,
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/14  Add for ftm mode shut down lcd */
+    &dev_attr_lcdoff.attr,
+    &dev_attr_hbm.attr,
+    &dev_attr_closebl.attr,
+    &dev_attr_esd.attr,
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+	&dev_attr_cabc.attr,
+#endif
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-08-08, add for LBR */
+	&dev_attr_lbr.attr,
+#endif
+
 	NULL,
 };
 
@@ -1204,7 +1405,45 @@ static int mdss_fb_probe(struct platform_device *pdev)
 			pr_err("failed to register input handler\n");
 
 	INIT_DELAYED_WORK(&mfd->idle_notify_work, __mdss_fb_idle_notify_work);
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2015/06/03  Add for silence mode */
+    if((MSM_BOOT_MODE__SILENCE == get_boot_mode()) || (MSM_BOOT_MODE__SAU == get_boot_mode())){
+        pr_debug("lcd_closebl_flag = 1\n");
+        lcd_closebl_flag = 1;
+    }
+#endif /*VENDOR_EDIT*/
 
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/03/12  Add for 15009 15035 clear power by android START */
+#ifndef OPPO_CMCC_MP /*YongPeng.Yi@SWDP.MultiMedia, 2015/11/04  Add for 15035 CMCC MP*/
+#ifndef OPPO_CMCC_TEST
+#ifndef OPPO_CU_TEST
+#ifndef MM_CUSTOMIZE_TYPE
+        //if(is_project(OPPO_15022) && (mfd->index==0) && (MSM_BOOT_MODE__NORMAL==get_boot_mode())){
+        if((mfd->index==0) && (MSM_BOOT_MODE__NORMAL==get_boot_mode()))
+        {
+            if(is_project(OPPO_16017) || is_project(OPPO_16027)){
+                struct mdss_overlay_private * mdp5_data = mfd_to_mdp5_data(mfd);
+                if(mdp5_data){
+                    struct mdss_mdp_ctl *ctl = mdp5_data->ctl;
+                    pr_err("16017 cmd mode erase Powerd by android\n");
+                    memset(phys_to_virt(mdp5_data->splash_mem_addr + 1520*1080*3), 0x00, 310*1080*3);
+                    mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_START, 1);
+                }
+            }
+            if(is_project(OPPO_16061)){
+                struct mdss_overlay_private * mdp5_data = mfd_to_mdp5_data(mfd);
+                if(mdp5_data){
+                    pr_err("16061 video mode erase Powerd by android\n");
+                    memset(phys_to_virt(mdp5_data->splash_mem_addr + 1080*720*3), 0x00, 200*720*3);
+                }
+            }
+        }
+#endif
+#endif
+#endif
+#endif
+#endif
 	return rc;
 }
 
@@ -1509,6 +1748,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	bool ad_bl_notify_needed = false;
 	bool bl_notify_needed = false;
 
+#ifndef VENDOR_EDIT
 	if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
 		|| !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd)) ||
 		mfd->panel_info->cont_splash_enabled) {
@@ -1519,6 +1759,28 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	} else {
 		mfd->unset_bl_level = U32_MAX;
 	}
+#else /*VENDOR_EDIT*/
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/04/01  Add for 15009 lcd-backlight ctrl in factory mode START */
+    boot_mode =get_boot_mode();
+    if(boot_mode == MSM_BOOT_MODE__FACTORY){
+        pdata = dev_get_platdata(&mfd->pdev->dev);
+        mfd->unset_bl_level = 0;
+        pdata->set_backlight(pdata, bkl_lvl);
+        return;
+    }else{
+        if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
+            || !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd)) ||
+            mfd->panel_info->cont_splash_enabled) {
+            mfd->unset_bl_level = bkl_lvl;
+            return;
+        } else if (mdss_fb_is_power_on(mfd) && mfd->panel_info->panel_dead) {
+            mfd->unset_bl_level = mfd->bl_level;
+        } else {
+            mfd->unset_bl_level = U32_MAX;
+        }
+    }
+/* YongPeng.Yi@SWDP.MultiMedia END */
+#endif /*VEDNOR_EDIT*/
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
@@ -1811,6 +2073,11 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 		mfd->index, blank_mode);
 	ATRACE_BEGIN(trace_buffer);
 
+    #ifdef VENDOR_EDIT
+    /* ShengJun.Gou@SWDP.MultiMedia, 2016/07/26  Add for 16017 lcd power up */
+    pr_info("%s.blunk in blank_mode = %d\n", __func__, blank_mode);
+    #endif /*VENDOR_EDIT*/
+
 	cur_power_state = mfd->panel_power_state;
 
 	/*
@@ -1877,8 +2144,11 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 
 	/* Notify listeners */
 	sysfs_notify(&mfd->fbi->dev->kobj, NULL, "show_blank_event");
-
-	ATRACE_END(trace_buffer);
+    #ifdef VENDOR_EDIT
+    /* ShengJun.Gou@SWDP.MultiMedia, 2016/07/26  Add for 16017 lcd power up */
+    pr_info("%s.blunk out\n", __func__);
+    #endif /*VENDOR_EDIT*/
+    ATRACE_END(trace_buffer);
 
 	return ret;
 }
@@ -1888,7 +2158,10 @@ static int mdss_fb_blank(int blank_mode, struct fb_info *info)
 	int ret;
 	struct mdss_panel_data *pdata;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
-
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    struct mdss_data_type *mdata;
+    #endif
 	ret = mdss_fb_pan_idle(mfd);
 	if (ret) {
 		pr_warn("mdss_fb_pan_idle for fb%d failed. ret=%d\n",
@@ -1908,6 +2181,12 @@ static int mdss_fb_blank(int blank_mode, struct fb_info *info)
 		return 0;
 	}
 	pr_debug("mode: %d\n", blank_mode);
+
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    mdata = mfd_to_mdata(mfd);
+    mdata->scm_set_allowable = false;
+    #endif
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
@@ -4070,8 +4349,6 @@ static int mdss_fb_handle_buf_sync_ioctl(struct msm_sync_pt_data *sync_pt_data,
 		goto buf_sync_err_2;
 	}
 
-	sync_fence_install(rel_fence, rel_fen_fd);
-
 	ret = copy_to_user(buf_sync->rel_fen_fd, &rel_fen_fd, sizeof(int));
 	if (ret) {
 		pr_err("%s: copy_to_user failed\n", sync_pt_data->fence_name);
@@ -4108,8 +4385,6 @@ static int mdss_fb_handle_buf_sync_ioctl(struct msm_sync_pt_data *sync_pt_data,
 		goto buf_sync_err_3;
 	}
 
-	sync_fence_install(retire_fence, retire_fen_fd);
-
 	ret = copy_to_user(buf_sync->retire_fen_fd, &retire_fen_fd,
 			sizeof(int));
 	if (ret) {
@@ -4120,7 +4395,11 @@ static int mdss_fb_handle_buf_sync_ioctl(struct msm_sync_pt_data *sync_pt_data,
 		goto buf_sync_err_3;
 	}
 
+	sync_fence_install(retire_fence, retire_fen_fd);
+
 skip_retire_fence:
+	sync_fence_install(rel_fence, rel_fen_fd);
+
 	mutex_unlock(&sync_pt_data->sync_mutex);
 
 	if (buf_sync->flags & MDP_BUF_SYNC_FLAG_WAIT)
@@ -4827,7 +5106,10 @@ void mdss_fb_report_panel_dead(struct msm_fb_data_type *mfd)
 		pr_err("Panel data not available\n");
 		return;
 	}
-
+#ifdef VENDOR_EDIT
+//YongPeng.Yi@SWDP.MultiMedia, 2016/05/17,  Add for exception log
+	mm_keylog_write("mdss lcd exception\n", "mdss report lcd panel dead\n", TYPE_ESD_EXCEPTION);
+#endif /*VENDOR_EDIT*/
 	pdata->panel_info.panel_dead = true;
 	kobject_uevent_env(&mfd->fbi->dev->kobj,
 		KOBJ_CHANGE, envp);
