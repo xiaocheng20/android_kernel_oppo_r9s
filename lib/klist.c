@@ -282,9 +282,16 @@ void klist_iter_init_node(struct klist *k, struct klist_iter *i,
 			  struct klist_node *n)
 {
 	i->i_klist = k;
+#ifndef VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2016/08/10  Modify for fix starting point removed bug in klist iterators 
 	i->i_cur = n;
 	if (n)
 		kref_get(&n->n_ref);
+#else /*VENDOR_EDIT*/
+	i->i_cur = NULL;
+	if (n && kref_get_unless_zero(&n->n_ref))
+		i->i_cur = n;
+#endif /*VENDOR_EDIT*/
 }
 EXPORT_SYMBOL_GPL(klist_iter_init_node);
 

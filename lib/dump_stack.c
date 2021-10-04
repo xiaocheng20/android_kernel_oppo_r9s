@@ -25,6 +25,10 @@ static atomic_t dump_lock = ATOMIC_INIT(-1);
 
 asmlinkage __visible void dump_stack(void)
 {
+#ifdef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
+	unsigned long flags;
+#endif
 	int was_locked;
 	int old;
 	int cpu;
@@ -33,9 +37,16 @@ asmlinkage __visible void dump_stack(void)
 	 * Permit this cpu to perform nested stack dumps while serialising
 	 * against other CPUs
 	 */
+#ifndef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
 	preempt_disable();
+#endif
 
 retry:
+#ifdef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
+	local_irq_save(flags);
+#endif
 	cpu = smp_processor_id();
 	old = atomic_cmpxchg(&dump_lock, -1, cpu);
 	if (old == -1) {
@@ -43,6 +54,10 @@ retry:
 	} else if (old == cpu) {
 		was_locked = 1;
 	} else {
+	#ifdef VENDOR_EDIT
+	//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
+	local_irq_restore(flags);
+	#endif
 		cpu_relax();
 		goto retry;
 	}
@@ -52,7 +67,12 @@ retry:
 	if (!was_locked)
 		atomic_set(&dump_lock, -1);
 
+#ifndef VENDOR_EDIT
+	//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
 	preempt_enable();
+#else
+	local_irq_restore(flags);
+#endif
 }
 #else
 asmlinkage __visible void dump_stack(void)
