@@ -234,6 +234,10 @@ int trace_array_get(struct trace_array *this_tr)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(trace_array_get);
+#endif
 
 static void __trace_array_put(struct trace_array *this_tr)
 {
@@ -247,6 +251,10 @@ void trace_array_put(struct trace_array *this_tr)
 	__trace_array_put(this_tr);
 	mutex_unlock(&trace_types_lock);
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(trace_array_put);
+#endif
 
 int filter_check_discard(struct ftrace_event_file *file, void *rec,
 			 struct ring_buffer *buffer,
@@ -425,7 +433,7 @@ unsigned long trace_flags = TRACE_ITER_PRINT_PARENT | TRACE_ITER_PRINTK |
 	TRACE_ITER_GRAPH_TIME | TRACE_ITER_RECORD_CMD | TRACE_ITER_OVERWRITE |
 	TRACE_ITER_IRQ_INFO | TRACE_ITER_MARKERS | TRACE_ITER_FUNCTION;
 
-static void tracer_tracing_on(struct trace_array *tr)
+void tracer_tracing_on(struct trace_array *tr)
 {
 	if (tr->trace_buffer.buffer)
 		ring_buffer_record_on(tr->trace_buffer.buffer);
@@ -441,6 +449,10 @@ static void tracer_tracing_on(struct trace_array *tr)
 	/* Make the flag seen by readers */
 	smp_wmb();
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(tracer_tracing_on);
+#endif
 
 /**
  * tracing_on - enable tracing buffers
@@ -695,7 +707,7 @@ void tracing_snapshot_alloc(void)
 EXPORT_SYMBOL_GPL(tracing_snapshot_alloc);
 #endif /* CONFIG_TRACER_SNAPSHOT */
 
-static void tracer_tracing_off(struct trace_array *tr)
+void tracer_tracing_off(struct trace_array *tr)
 {
 	if (tr->trace_buffer.buffer)
 		ring_buffer_record_off(tr->trace_buffer.buffer);
@@ -711,6 +723,10 @@ static void tracer_tracing_off(struct trace_array *tr)
 	/* Make the flag seen by readers */
 	smp_wmb();
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(tracer_tracing_off);
+#endif
 
 /**
  * tracing_off - turn off tracing buffers
@@ -1285,11 +1301,11 @@ void tracing_reset_all_online_cpus(void)
 
 #define SAVED_CMDLINES_DEFAULT 128
 #define NO_CMDLINE_MAP UINT_MAX
-static unsigned saved_tgids[SAVED_CMDLINES_DEFAULT];
 static arch_spinlock_t trace_cmdline_lock = __ARCH_SPIN_LOCK_UNLOCKED;
 struct saved_cmdlines_buffer {
 	unsigned map_pid_to_cmdline[PID_MAX_DEFAULT+1];
 	unsigned *map_cmdline_to_pid;
+	unsigned *map_cmdline_to_tgid;
 	unsigned cmdline_num;
 	int cmdline_idx;
 	char *saved_cmdlines;
@@ -1323,12 +1339,23 @@ static int allocate_cmdlines_buffer(unsigned int val,
 		return -ENOMEM;
 	}
 
+	s->map_cmdline_to_tgid = kmalloc_array(val,
+					       sizeof(*s->map_cmdline_to_tgid),
+					       GFP_KERNEL);
+	if (!s->map_cmdline_to_tgid) {
+		kfree(s->map_cmdline_to_pid);
+		kfree(s->saved_cmdlines);
+		return -ENOMEM;
+	}
+
 	s->cmdline_idx = 0;
 	s->cmdline_num = val;
 	memset(&s->map_pid_to_cmdline, NO_CMDLINE_MAP,
 	       sizeof(s->map_pid_to_cmdline));
 	memset(s->map_cmdline_to_pid, NO_CMDLINE_MAP,
 	       val * sizeof(*s->map_cmdline_to_pid));
+	memset(s->map_cmdline_to_tgid, NO_CMDLINE_MAP,
+	       val * sizeof(*s->map_cmdline_to_tgid));
 
 	return 0;
 }
@@ -1494,14 +1521,17 @@ static int trace_save_cmdline(struct task_struct *tsk)
 	if (!tsk->pid || unlikely(tsk->pid > PID_MAX_DEFAULT))
 		return 0;
 
+	preempt_disable();
 	/*
 	 * It's not the end of the world if we don't get
 	 * the lock, but we also don't want to spin
 	 * nor do we want to disable interrupts,
 	 * so if we miss here, then better luck next time.
 	 */
-	if (!arch_spin_trylock(&trace_cmdline_lock))
+	if (!arch_spin_trylock(&trace_cmdline_lock)) {
+		preempt_enable();
 		return 0;
+	}
 
 	idx = savedcmd->map_pid_to_cmdline[tsk->pid];
 	if (idx == NO_CMDLINE_MAP) {
@@ -1524,8 +1554,9 @@ static int trace_save_cmdline(struct task_struct *tsk)
 	}
 
 	set_cmdline(idx, tsk->comm);
-	saved_tgids[idx] = tsk->tgid;
+	savedcmd->map_cmdline_to_tgid[idx] = tsk->tgid;
 	arch_spin_unlock(&trace_cmdline_lock);
+	preempt_enable();
 
 	return 1;
 }
@@ -1567,18 +1598,28 @@ void trace_find_cmdline(int pid, char comm[])
 	preempt_enable();
 }
 
-int trace_find_tgid(int pid)
+static int __find_tgid_locked(int pid)
 {
 	unsigned map;
 	int tgid;
 
-	preempt_disable();
-	arch_spin_lock(&trace_cmdline_lock);
 	map = savedcmd->map_pid_to_cmdline[pid];
 	if (map != NO_CMDLINE_MAP)
-		tgid = saved_tgids[map];
+		tgid = savedcmd->map_cmdline_to_tgid[map];
 	else
 		tgid = -1;
+
+	return tgid;
+}
+
+int trace_find_tgid(int pid)
+{
+	int tgid;
+
+	preempt_disable();
+	arch_spin_lock(&trace_cmdline_lock);
+
+	tgid = __find_tgid_locked(pid);
 
 	arch_spin_unlock(&trace_cmdline_lock);
 	preempt_enable();
@@ -3572,7 +3613,7 @@ int set_tracer_flag(struct trace_array *tr, unsigned int mask, int enabled)
 	return 0;
 }
 
-static int trace_set_options(struct trace_array *tr, char *option)
+int trace_set_options(struct trace_array *tr, char *option)
 {
 	char *cmp;
 	int neg = 0;
@@ -3603,6 +3644,25 @@ static int trace_set_options(struct trace_array *tr, char *option)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(trace_set_options);
+
+int get_system_default_ftrace(struct trace_array ** tr_ret)
+{
+	struct trace_array *tr = &global_trace;
+
+	if (tracing_disabled)
+		return -ENODEV;
+
+	if (trace_array_get(tr) < 0)
+		return -ENODEV;
+
+	*tr_ret = tr;
+	return 0;
+}
+EXPORT_SYMBOL(get_system_default_ftrace);
+#endif
 
 static ssize_t
 tracing_trace_options_write(struct file *filp, const char __user *ubuf,
@@ -3881,10 +3941,15 @@ tracing_saved_cmdlines_size_read(struct file *filp, char __user *ubuf,
 {
 	char buf[64];
 	int r;
+	unsigned int n;
 
+	preempt_disable();
 	arch_spin_lock(&trace_cmdline_lock);
-	r = scnprintf(buf, sizeof(buf), "%u\n", savedcmd->cmdline_num);
+	n = savedcmd->cmdline_num;
 	arch_spin_unlock(&trace_cmdline_lock);
+	preempt_enable();
+
+	r = scnprintf(buf, sizeof(buf), "%u\n", n);
 
 	return simple_read_from_buffer(ubuf, cnt, ppos, buf, r);
 }
@@ -3893,6 +3958,7 @@ static void free_saved_cmdlines_buffer(struct saved_cmdlines_buffer *s)
 {
 	kfree(s->saved_cmdlines);
 	kfree(s->map_cmdline_to_pid);
+	kfree(s->map_cmdline_to_tgid);
 	kfree(s);
 }
 
@@ -3909,10 +3975,12 @@ static int tracing_resize_saved_cmdlines(unsigned int val)
 		return -ENOMEM;
 	}
 
+	preempt_disable();
 	arch_spin_lock(&trace_cmdline_lock);
 	savedcmd_temp = savedcmd;
 	savedcmd = s;
 	arch_spin_unlock(&trace_cmdline_lock);
+	preempt_enable();
 	free_saved_cmdlines_buffer(savedcmd_temp);
 
 	return 0;
@@ -3955,33 +4023,61 @@ tracing_saved_tgids_read(struct file *file, char __user *ubuf,
 	char *file_buf;
 	char *buf;
 	int len = 0;
-	int pid;
 	int i;
+	int *pids;
+	int n = 0;
 
-	file_buf = kmalloc(SAVED_CMDLINES_DEFAULT*(16+1+16), GFP_KERNEL);
-	if (!file_buf)
+	preempt_disable();
+	arch_spin_lock(&trace_cmdline_lock);
+
+	pids = kmalloc_array(savedcmd->cmdline_num, 2*sizeof(int), GFP_KERNEL);
+	if (!pids) {
+		arch_spin_unlock(&trace_cmdline_lock);
+		preempt_enable();
 		return -ENOMEM;
+	}
 
-	buf = file_buf;
-
-	for (i = 0; i < SAVED_CMDLINES_DEFAULT; i++) {
-		int tgid;
-		int r;
+	for (i = 0; i < savedcmd->cmdline_num; i++) {
+		int pid;
 
 		pid = savedcmd->map_cmdline_to_pid[i];
 		if (pid == -1 || pid == NO_CMDLINE_MAP)
 			continue;
 
-		tgid = trace_find_tgid(pid);
-		r = sprintf(buf, "%d %d\n", pid, tgid);
+		pids[n] = pid;
+		pids[n+1] = __find_tgid_locked(pid);
+		n += 2;
+	}
+	arch_spin_unlock(&trace_cmdline_lock);
+	preempt_enable();
+
+	if (n == 0) {
+		kfree(pids);
+		return 0;
+	}
+
+	/* enough to hold max pair of pids + space, lr and nul */
+	len = n * 12;
+	file_buf = kmalloc(len, GFP_KERNEL);
+	if (!file_buf) {
+		kfree(pids);
+		return -ENOMEM;
+	}
+
+	buf = file_buf;
+	for (i = 0; i < n && len > 0; i += 2) {
+		int r;
+
+		r = snprintf(buf, len, "%d %d\n", pids[i], pids[i+1]);
 		buf += r;
-		len += r;
+		len -= r;
 	}
 
 	len = simple_read_from_buffer(ubuf, cnt, ppos,
-				      file_buf, len);
+				      file_buf, buf - file_buf);
 
 	kfree(file_buf);
+	kfree(pids);
 
 	return len;
 }
@@ -4115,7 +4211,7 @@ static int __tracing_resize_ring_buffer(struct trace_array *tr,
 	return ret;
 }
 
-static ssize_t tracing_resize_ring_buffer(struct trace_array *tr,
+ssize_t tracing_resize_ring_buffer(struct trace_array *tr,
 					  unsigned long size, int cpu_id)
 {
 	int ret = size;
@@ -4139,6 +4235,10 @@ out:
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(tracing_resize_ring_buffer);
+#endif
 
 
 /**
@@ -5037,6 +5137,43 @@ static int tracing_clock_show(struct seq_file *m, void *v)
 
 	return 0;
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+int tracing_clock_update(struct trace_array *tr, const char *buf)
+{
+	const char *clockstr = buf;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(trace_clocks); i++) {
+		if (strcmp(trace_clocks[i].name, clockstr) == 0)
+			break;
+	}
+	if (i == ARRAY_SIZE(trace_clocks))
+		return -EINVAL;
+
+	mutex_lock(&trace_types_lock);
+
+	tr->clock_id = i;
+
+	ring_buffer_set_clock(tr->trace_buffer.buffer, trace_clocks[i].func);
+
+	/*
+	 * New clock may not be consistent with the previous clock.
+	 * Reset the buffer so that it doesn't have incomparable timestamps.
+	 */
+	tracing_reset_online_cpus(&tr->trace_buffer);
+
+#ifdef CONFIG_TRACER_MAX_TRACE
+	if (tr->flags & TRACE_ARRAY_FL_GLOBAL && tr->max_buffer.buffer)
+		ring_buffer_set_clock(tr->max_buffer.buffer, trace_clocks[i].func);
+	tracing_reset_online_cpus(&tr->max_buffer);
+#endif
+
+	mutex_unlock(&trace_types_lock);
+	return 0;
+}
+EXPORT_SYMBOL(tracing_clock_update);
+#endif
 
 static int tracing_set_clock(struct trace_array *tr, const char *clockstr)
 {
@@ -6399,7 +6536,7 @@ static void free_trace_buffers(struct trace_array *tr)
 #endif
 }
 
-static int new_instance_create(const char *name)
+int new_instance_create(const char *name)
 {
 	struct trace_array *tr;
 	int ret;
@@ -6468,8 +6605,12 @@ static int new_instance_create(const char *name)
 	return ret;
 
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(new_instance_create);
+#endif
 
-static int instance_delete(const char *name)
+int instance_delete(const char *name)
 {
 	struct trace_array *tr;
 	int found = 0;
@@ -6509,6 +6650,10 @@ static int instance_delete(const char *name)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(instance_delete);
+#endif
 
 static int instance_mkdir (struct inode *inode, struct dentry *dentry, umode_t mode)
 {

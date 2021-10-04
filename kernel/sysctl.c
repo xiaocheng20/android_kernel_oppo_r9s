@@ -62,6 +62,12 @@
 #include <linux/capability.h>
 #include <linux/binfmts.h>
 #include <linux/sched/sysctl.h>
+
+#ifdef VENDOR_EDIT
+//Ming.Liu@Connectivity.WiFi.Network.quality.FN7, 2016/10/09,
+//add for: [monitor tcp info]
+#include <net/tcp.h>
+#endif /* VENDOR_EDIT */
 #include <linux/kexec.h>
 
 #include <asm/uaccess.h>
@@ -128,6 +134,16 @@ static int __maybe_unused two = 2;
 static int __maybe_unused four = 4;
 static unsigned long one_ul = 1;
 static int one_hundred = 100;
+
+#ifdef VENDOR_EDIT //yixue.ge@PSW.BSP.Kernel.Driver 20170720 add for add direct_vm_swappiness
+extern int direct_vm_swappiness;
+static int two_hundred = 200;
+#endif
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.Performance, 2018-04-28, add foreground task io opt*/
+unsigned int sysctl_fg_io_opt = 1;
+#endif /*VENDOR_EDIT*/
+
 #ifdef CONFIG_PRINTK
 static int ten_thousand = 10000;
 #endif
@@ -376,6 +392,7 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_hmp_proc_update_handler,
 	},
+
 	{
 		.procname	= "sched_min_runtime",
 		.data		= &sysctl_sched_min_runtime,
@@ -392,6 +409,16 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &zero,
 		.extra2		= &one,
 	},
+#endif
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.Performance, 2018-04-28, add foreground task io opt*/
+{
+		.procname	= "fg_io_opt",
+		.data		= &sysctl_fg_io_opt,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+},
 #endif
 	{
 		.procname	= "sched_spill_load",
@@ -804,6 +831,16 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+	{
+		.procname	= "print_fatal_murder",
+		.data		= &print_system_murder,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+#endif
 #ifdef CONFIG_SPARC
 	{
 		.procname	= "reboot-cmd",
@@ -1294,6 +1331,17 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &neg_one,
 	},
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+		/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, record the hung task killing */
+			{
+				.procname	= "hung_task_oppo_kill",
+				.data		= &sysctl_hung_task_oppo_kill,
+				.maxlen 	= 128,
+				.mode		= 0666,
+				.proc_handler	= proc_dostring,
+			},
+#endif
+
 #endif
 #ifdef CONFIG_COMPAT
 	{
@@ -1526,8 +1574,23 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
+#ifdef VENDOR_EDIT //yixue.ge@PSW.BSP.Kernel.Driver 20170720 add for add direct_vm_swappiness
+		.extra2		= &two_hundred,
+#else
 		.extra2		= &one_hundred,
+#endif
 	},
+#ifdef VENDOR_EDIT //yixue.ge@PSW.BSP.Kernel.Driver 20170720 add for add direct_vm_swappiness
+	{
+		.procname	= "direct_swappiness",
+		.data		= &direct_vm_swappiness,
+		.maxlen 	= sizeof(direct_vm_swappiness),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1 	= &zero,
+		.extra2 	= &two_hundred,
+	},
+#endif
 #ifdef CONFIG_HUGETLB_PAGE
 	{
 		.procname	= "nr_hugepages",
@@ -2414,6 +2477,203 @@ int proc_dointvec(struct ctl_table *table, int write,
     return do_proc_dointvec(table,write,buffer,lenp,ppos,
 		    	    NULL,NULL);
 }
+
+#ifdef VENDOR_EDIT
+//Ming.Liu@Connectivity.WiFi.Network.quality.FN7, 2016/10/09,
+//add for: [monitor tcp info]
+
+static int proc_put_string(void __user **dst_buf, size_t *buf_size, char * src_str, int str_len)
+{
+	if (*buf_size >= str_len) {
+		char __user **buffer = (char __user **)dst_buf;
+		if ( copy_to_user(*buffer, src_str, str_len)) {
+			printk(KERN_INFO "[xuxint] [proc_put_string] return -EFAULT; \n");
+			return -EFAULT;
+		}
+		(*buf_size) -= str_len;
+		(*buffer) += str_len;
+		*dst_buf = *buffer;
+		return 0;
+	}
+	printk(KERN_INFO "[xuxint] [proc_put_string] buf_size >= str_len; buf_size = %d; str_len = %d\n", (int)(*buf_size), str_len);
+	return -EFAULT;
+}
+
+static int proc_string_memcpy(void **dst_buf, size_t *buf_size, char * src_str, int str_len)
+{
+	if (*buf_size >= str_len) {
+		char **buffer = (char **)dst_buf;
+		memcpy(*buffer, src_str, str_len);
+		(*buf_size) -= str_len;
+		(*buffer) += str_len;
+		*dst_buf = *buffer;
+		return 0;
+	}
+	printk(KERN_INFO "[xuxint] [proc_string_memcpy] buf_size >= str_len; buf_size = %d; str_len = %d\n", (int)(*buf_size), str_len);
+	return -EFAULT;
+}
+
+/*
+static int proc_put_header_tcpinfo(void **dst_buf, size_t *buf_size, struct tcp_info *info)
+{
+	char tmp[500];
+	int len;
+
+	len = sprintf(tmp, "%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s\n",
+					"state", "ca_state", "retransm", "probes", "backoff", "options", "snd_wsca", "rcv_wsca", "rto", "ato", "snd_mss",
+					"rcv_mss", "unacked", "sacked", "lost", "retrans", "fackets", "last_d_s", "last_a_s", "last_d_r", "last_a_r",
+					"pmtu", "rcv_ssth", "rtt", "rttvar", "snd_ssth", "snd_cwnd", "advmss", "reorder", "rcv_rtt", "rcv_space", "t_retrans");
+	len = sprintf(tmp, "%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s%-11s\n",
+					"state", "options", "rto", "lost", "retrans", "last_d_s", "last_d_r", "rtt", "rcv_rtt");
+	if (proc_string_memcpy(dst_buf, buf_size, tmp, len)) {
+		return -EFAULT;
+	}
+	return len;
+}
+*/
+
+static int proc_put_one_tcpinfo(void **dst_buf, size_t *buf_size, struct tcp_info *info)
+{
+	char tmp[500];
+	int len;
+
+	/*
+	len = sprintf(tmp, "%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|%-10u|\n",
+					info->tcpi_state, info->tcpi_ca_state, info->tcpi_retransmits, info->tcpi_probes, info->tcpi_backoff, info->tcpi_options,
+					info->tcpi_snd_wscale, info->tcpi_rcv_wscale, info->tcpi_rto, info->tcpi_ato, info->tcpi_snd_mss, info->tcpi_rcv_mss,
+					info->tcpi_unacked, info->tcpi_sacked, info->tcpi_lost, info->tcpi_retrans, info->tcpi_fackets, info->tcpi_last_data_sent,
+					info->tcpi_last_ack_sent, info->tcpi_last_data_recv, info->tcpi_last_ack_recv, info->tcpi_pmtu, info->tcpi_rcv_ssthresh,
+					info->tcpi_rtt, info->tcpi_rttvar, info->tcpi_snd_ssthresh, info->tcpi_snd_cwnd, info->tcpi_advmss, info->tcpi_reordering,
+					info->tcpi_rcv_rtt, info->tcpi_rcv_space, info->tcpi_total_retrans);
+	*/
+
+	len = sprintf(tmp, "state=%-10u ca_state=%-10u options=%-10u rto=%-10u ato=%-10u unacked=%-10u last_d_s=%-10u last_d_r=%-10u last_a_r=%-10u rtt=%-10u rcv_space=%-10u t_retrans=%-10u \n",
+					info->tcpi_state, info->tcpi_ca_state, info->tcpi_options, info->tcpi_rto, info->tcpi_ato, info->tcpi_unacked,
+					info->tcpi_last_data_sent, info->tcpi_last_data_recv, info->tcpi_last_ack_recv, info->tcpi_rtt, info->tcpi_rcv_space, info->tcpi_total_retrans);
+
+	if (proc_string_memcpy(dst_buf, buf_size, tmp, len)) {
+		return -EFAULT;
+	}
+	return 0;
+}
+
+
+int proc_do_print_tcpinfo(struct ctl_table *table, int write,
+		     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	size_t left_count = *lenp;
+	size_t temp_len = *lenp;
+	void *mem_buff_ptr = NULL;
+	void *temp_buff_ptr = NULL;
+	//int buffer_not_enough = 0;
+	int tcp_info_print = -1;
+
+	if (table->data) {
+		tcp_info_print = *((int *)table->data);
+	}
+	//printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] 1 ; write = %d; buffer = %p; *lenp = %d; *ppos = %d; tcp_info_print = %d\n",
+	//		write, buffer, (int)(*lenp), (int)(*ppos), tcp_info_print);
+
+	if ((tcp_info_print < 0) && (!table->data || !table->maxlen || !*lenp || (*ppos && !write))) {
+		*lenp = 0;
+		return 0;
+	}
+	/*
+	count_print ++;
+	printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] count_print = %d\n", count_print);
+	proc_put_string(&buffer, &left_count, "new string print\n", strlen("new string print\n"));
+	*lenp -= left_count;
+	*ppos += left_count;
+
+	return 0;
+	*/
+
+	if (! write && buffer) {
+		struct tcp_info tcpinfo;
+		unsigned int bucket;
+		//int header_len = 0;
+		int print_counter = -1;
+
+		mem_buff_ptr = kmalloc(left_count, GFP_ATOMIC);
+		if (!mem_buff_ptr) {
+			printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] kmalloc is fail; mem_buff_ptr = NULL\n");
+			goto put_return;
+		}
+		temp_buff_ptr = mem_buff_ptr;
+
+		/*
+		if (tcp_info_print < 0) {  //pirnt header
+			header_len = proc_put_header_tcpinfo(&temp_buff_ptr, &left_count, &tcpinfo);
+			printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] header_len = %d\n", header_len);
+			if (header_len == -EFAULT) {
+				goto put_return;
+			}
+		}
+		*/
+		for (bucket = 0; bucket <= tcp_hashinfo.ehash_mask; bucket++) {
+			struct sock *sk;
+			struct hlist_nulls_node *node;
+			spinlock_t *lock = inet_ehash_lockp(&tcp_hashinfo, bucket);
+			spin_lock_bh(lock);
+
+			sk_nulls_for_each(sk, node, &tcp_hashinfo.ehash[bucket].chain) {
+
+				if (sk->sk_state == TCP_TIME_WAIT) {
+					continue;
+				}
+
+				print_counter ++;
+
+				if (print_counter < tcp_info_print) {
+					continue;
+				}
+
+				//printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] 1_0: sk = %p; sk->sk_state = %d; temp_buff = %p; temp_left = %d; print_counter = %d\n",
+				//			sk, sk->sk_state, temp_buff_ptr, (int)left_count, print_counter);
+
+				tcp_get_info(sk, &tcpinfo);
+				if (proc_put_one_tcpinfo(&temp_buff_ptr, &left_count, &tcpinfo)) {
+					if (table->data) {  //save print tcpinfo sk index
+					    *((int *)table->data) = print_counter;
+					}
+					spin_unlock_bh(lock);
+					goto put_return;
+				}
+
+				//if (proc_string_memcpy(&temp_buff_ptr, &left_count, "test string print\n", strlen("test string print\n"))) {
+				//	spin_unlock_bh(lock);
+				//	goto put_return;
+				//}
+
+				//printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] 1_1: buffer = %p; left_count = %d\n", temp_buff_ptr, (int)left_count);
+			}
+			spin_unlock_bh(lock);
+		}
+		if (table->data) {  //recover tcp_info_print value
+			*((int *)table->data) = -1;
+		}
+
+	}
+
+
+put_return:
+
+	if (mem_buff_ptr) {
+		//printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] *lenp = %d; left_count = %d\n", (int)(*lenp), (int)left_count);
+		proc_put_string(&buffer, &temp_len, mem_buff_ptr, (*lenp) - left_count);
+		kfree(mem_buff_ptr);
+	}
+	*lenp -= left_count;
+	*ppos += left_count;
+
+	//printk(KERN_INFO "[xuxint] [proc_do_tcpinfoprint] 2: *lenp = %d; *ppos = %d; left_count = %d\n",
+	//		(int)(*lenp), (int)(*ppos), (int)left_count);
+
+	return 0;
+}
+
+#endif /* VENDOR_EDIT */
+
 
 /*
  * Taint values can only be increased
