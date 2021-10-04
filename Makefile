@@ -415,6 +415,100 @@ KBUILD_AFLAGS_MODULE  := -DMODULE
 KBUILD_CFLAGS_MODULE  := -DMODULE
 KBUILD_LDFLAGS_MODULE := -T $(srctree)/scripts/module-common.lds
 
+# ifdef VENDOR_EDIT
+# jiangyg@OnlineRd.PM, 2013/10/15, add enviroment variant
+KBUILD_CFLAGS +=   -DVENDOR_EDIT
+KBUILD_CPPFLAGS += -DVENDOR_EDIT
+CFLAGS_KERNEL +=   -DVENDOR_EDIT
+CFLAGS_MODULE +=   -DVENDOR_EDIT
+#Added by guanling.yang@SCM.ROM,015-11-23 add for disable fastboot modem at release soft
+#ifneq ($(filter release cts cta,$(OPPO_BUILD_TYPE)),)
+# CFLAGS_KERNEL += -DDISABLE_FASTBOOT_CMDS=1
+#endif
+ifeq ($(OPPO_TARGET_DEVICE),MSM_16017)
+  KBUILD_CFLAGS += -DIS_PROJECT_16017
+  KBUILD_CPPFLAGS += -DIS_PROJECT_16017
+  CFLAGS_KERNEL += -DIS_PROJECT_16017
+  CFLAGS_MODULE += -DIS_PROJECT_16017
+endif
+
+ifeq ($(SPECIAL_OPPO_CONFIG),1)
+KBUILD_CFLAGS += -DCONFIG_OPPO_SPECIAL_BUILD
+endif
+
+ifneq ($(SPECIAL_OPPO_CONFIG),1)
+ifeq ($(filter release cts,$(OPPO_BUILD_TYPE)),)
+ifeq ($(filter cmcctest cmccfield allnetcttest allnetcmcctest allnetcmccfield,$(NET_BUILD_TYPE)),)
+KBUILD_CFLAGS += -DCONFIG_OPPO_DAILY_BUILD
+endif
+endif
+#ifdef VENDOR_EDIT
+#Hui.Fan@BSP.Kernel.Debug, 2016-10-22, add for DeathHealer enter dump in aging test
+else
+KBUILD_CFLAGS += -DOPPO_AGING_TEST
+#endif
+endif
+
+#ifdef VENDOR_EDIT
+#LiPing@MultiMedia.Display.LCD.Stability, 2016/10/13 add for ct test backlight
+ifneq ($(filter allnetcttest allnetctfield,$(NET_BUILD_TYPE)),)
+KBUILD_CFLAGS += -DOPPO_CTTEST_FLAG
+endif
+#endif /* VENDOR_EDIT */
+
+ifneq ($(filter cmcctest cmccfield allnetcmcctest allnetcmccfield,$(NET_BUILD_TYPE)),)
+KBUILD_CFLAGS += -DOPPO_CMCC_TEST
+endif
+
+ifneq ($(filter cmcc allnetcmcc,$(NET_BUILD_TYPE)),)
+KBUILD_CFLAGS += -DOPPO_CMCC_MP
+endif
+ifeq ($(NET_BUILD_TYPE),cutest)
+KBUILD_CFLAGS += -DOPPO_CU_TEST
+endif
+ifeq ($(NET_BUILD_TYPE),cu)
+KBUILD_CFLAGS += -DOPPO_CU_CLIENT
+endif
+ifeq ($(NET_BUILD_TYPE),cmcctest_dm)
+KBUILD_CFLAGS += -DOPPO_CMCC_TEST
+endif
+ifeq ($(OPPO_BUILD_TYPE),cta)
+KBUILD_CFLAGS += -DOPPO_CTA_FLAG
+KBUILD_CPPFLAGS += -DOPPO_CTA_FLAG
+endif
+ifeq ($(OPPO_TARGET_DEVICE),MSM_14042)
+KBUILD_CFLAGS += -DOPPO_CU_TEST
+endif
+ifneq ($(filter $(OPPO_TARGET_DEVICE),MSM_14037 MSM_14039 MSM_14040 MSM_14065),)
+KBUILD_CFLGAS += -DCONFIG_ENHANCED_LMK
+CFLAGS_KERNEL +=   -DCONFIG_ENHANCED_LMK
+CFLAGS_MODULE +=   -DCONFIG_ENHANCED_LMK
+KBUILD_CPPFLAGS += -DCONFIG_ENHANCED_LMK
+endif
+#endif /*VENDOR_EDIT*/
+
+#ifdef  VENDOR_EDIT
+#add by vincent for CUSTOMIZE_TYPE compile
+ifneq (,$(OPPO_BUILD_CUSTOMIZE))
+KBUILD_CFLAGS += -DCUSTOMIZE_TYPE_$(OPPO_BUILD_CUSTOMIZE)
+KBUILD_CPPFLAGS += -DCUSTOMIZE_TYPE_$(OPPO_BUILD_CUSTOMIZE)
+CFLAGS_KERNEL += -DCUSTOMIZE_TYPE_$(OPPO_BUILD_CUSTOMIZE)
+CFLAGS_MODULE += -DCUSTOMIZE_TYPE_$(OPPO_BUILD_CUSTOMIZE)
+endif
+#endif
+
+#ifdef  VENDOR_EDIT
+#ye.zhang@Sensor.config,2016-09-09, add for CTSI support external storage or not
+$(info @@@@@@@@@@@ 111 OPPO_BUILD_CUSTOMIZE is $(OPPO_BUILD_CUSTOMIZE))
+ifneq ($(OPPO_BUILD_CUSTOMIZE),)
+$(info @@@@@@@@@@@ 222 OPPO_BUILD_CUSTOMIZE is $(OPPO_BUILD_CUSTOMIZE))
+KBUILD_CFLAGS += -DMOUNT_EXSTORAGE_IF
+KBUILD_CPPFLAGS += -DMOUNT_EXSTORAGE_IF
+CFLAGS_KERNEL += -DMOUNT_EXSTORAGE_IF
+CFLAGS_MODULE += -DMOUNT_EXSTORAGE_IF
+endif
+#endif//VENDOR_EDIT
+
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
 KERNELRELEASE = $(shell cat include/config/kernel.release 2> /dev/null)
 KERNELVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
@@ -1589,6 +1683,19 @@ ifneq ($(cmd_files),)
   $(cmd_files): ;	# Do not try to update included dependency files
   include $(cmd_files)
 endif
+
+#ifdef VENDOR_EDIT
+#Shengjun.Gou@Multimedia.Driver.LOGO, 2016/10/19,
+#add for for mm customize version 
+$(info @@@@@@@@@@@ MM OPPO_BUILD_CUSTOMIZE is $(OPPO_BUILD_CUSTOMIZE))
+ifneq ($(filter CTSI30 CTSI31 PERFECT,$(OPPO_BUILD_CUSTOMIZE)),)
+$(info @@@@@@@@@@@ MM OPPO_BUILD_CUSTOMIZE is $(OPPO_BUILD_CUSTOMIZE))
+KBUILD_CFLAGS += -DMM_CUSTOMIZE_TYPE
+KBUILD_CPPFLAGS += -DMM_CUSTOMIZE_TYPE
+CFLAGS_KERNEL += -DMM_CUSTOMIZE_TYPE
+CFLAGS_MODULE += -DMM_CUSTOMIZE_TYPE
+endif
+#endif /*VENDOR_EDIT*/
 
 # Shorthand for $(Q)$(MAKE) -f scripts/Makefile.clean obj=dir
 # Usage:
