@@ -118,6 +118,8 @@ static inline struct anon_vma *page_anon_vma(struct page *page)
 	return page_rmapping(page);
 }
 
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 936c791525f61bbc565806af7aed82017f4103ea
 static inline void vma_lock_anon_vma(struct vm_area_struct *vma)
 {
 	struct anon_vma *anon_vma = vma->anon_vma;
@@ -131,6 +133,7 @@ static inline void vma_unlock_anon_vma(struct vm_area_struct *vma)
 	if (anon_vma)
 		up_write(&anon_vma->root->rwsem);
 }
+#endif
 
 static inline void anon_vma_lock_write(struct anon_vma *anon_vma)
 {

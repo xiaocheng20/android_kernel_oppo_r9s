@@ -75,7 +75,12 @@ typedef u64 __nocast cputime64_t;
  */
 static inline cputime_t timespec_to_cputime(const struct timespec *val)
 {
+#ifndef VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2016/08/10  Modify for Prevent 32bit overflow in time[val|spec]_to_cputime() 
 	u64 ret = val->tv_sec * NSEC_PER_SEC + val->tv_nsec;
+#else /*VENDOR_EDIT*/
+	u64 ret = (u64)val->tv_sec * NSEC_PER_SEC + val->tv_nsec;
+#endif /*VENDOR_EDIT*/
 	return (__force cputime_t) ret;
 }
 static inline void cputime_to_timespec(const cputime_t ct, struct timespec *val)
@@ -91,7 +96,13 @@ static inline void cputime_to_timespec(const cputime_t ct, struct timespec *val)
  */
 static inline cputime_t timeval_to_cputime(const struct timeval *val)
 {
+#ifndef VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2016/08/10  Modify for Prevent 32bit overflow in time[val|spec]_to_cputime() 
 	u64 ret = val->tv_sec * NSEC_PER_SEC + val->tv_usec * NSEC_PER_USEC;
+#else /*VENDOR_EDIT*/
+	u64 ret = (u64)val->tv_sec * NSEC_PER_SEC +
+			val->tv_usec * NSEC_PER_USEC;
+#endif /*VENDOR_EDIT*/
 	return (__force cputime_t) ret;
 }
 static inline void cputime_to_timeval(const cputime_t ct, struct timeval *val)

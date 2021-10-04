@@ -55,6 +55,13 @@ enum {
 	 */
 	MIGRATE_CMA,
 #endif
+#ifdef VENDOR_EDIT
+/* Hucai.Zhou@PSW.BSP.Kernel.MM, 2018-3-15
+ * Add a migrate type to manage special page alloc/free
+ */
+        MIGRATE_OPPO0,
+        MIGRATE_OPPO2,
+#endif /* VENDOR_EDIT */
 	MIGRATE_PCPTYPES, /* the number of types on the pcp lists */
 	MIGRATE_RESERVE = MIGRATE_PCPTYPES,
 #ifdef CONFIG_MEMORY_ISOLATION
@@ -170,6 +177,13 @@ enum zone_stat_item {
 	WORKINGSET_NODERECLAIM,
 	NR_ANON_TRANSPARENT_HUGEPAGES,
 	NR_FREE_CMA_PAGES,
+#ifdef VENDOR_EDIT
+/* Hucai.Zhou@PSW.BSP.Kernel.MM, 2018-3-15
+ * Account free pages for MIGRATE_OPPO
+ */
+	NR_FREE_OPPO0_PAGES,
+	NR_FREE_OPPO2_PAGES,
+#endif
 	NR_SWAPCACHE,
 	NR_VM_ZONE_STAT_ITEMS };
 
@@ -357,7 +371,13 @@ struct zone {
 #ifdef CONFIG_NUMA
 	int node;
 #endif
-
+#ifdef VENDOR_EDIT
+/* Hucai.Zhou@PSW.BSP.Kernel.MM, 2018-3-15
+ * Number of MIGRATE_OPPO page block.
+ */
+	unsigned long nr_migrate_oppo0_block;
+	unsigned long nr_migrate_oppo2_block;
+#endif /* VENDOR_EDIT */
 	/*
 	 * The target ratio of ACTIVE_ANON to INACTIVE_ANON pages on
 	 * this zone's LRU.  Maintained by the pageout code.

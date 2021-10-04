@@ -237,6 +237,9 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 			break;						\
 		}							\
 									\
+		if((ret == 0) && hung_long_and_fatal_signal_pending(current)) { \
+			break;\
+		}\
 		cmd;							\
 	}								\
 	finish_wait(&wq, &__wait);					\

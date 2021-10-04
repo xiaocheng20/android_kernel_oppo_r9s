@@ -373,13 +373,40 @@ radix_tree_iter_init(struct radix_tree_iter *iter, unsigned long start)
 void **radix_tree_next_chunk(struct radix_tree_root *root,
 			     struct radix_tree_iter *iter, unsigned flags);
 
+#ifdef VENDOR_EDIT
+/* Hui.Fan@BSP.Kernel.Lib, 2016-09-12
+ * merge kernel community patch to fix radix-tree race in gang lookup
+ */
+/**
+ * radix_tree_iter_retry - retry this chunk of the iteration
+ * @iter:	iterator state
+ *
+ * If we iterate over a tree protected only by the RCU lock, a race
+ * against deletion or creation may result in seeing a slot for which
+ * radix_tree_deref_retry() returns true.  If so, call this function
+ * and continue the iteration.
+ */
+static inline __must_check
+void **radix_tree_iter_retry(struct radix_tree_iter *iter)
+{
+	iter->next_index = iter->index;
+	iter->tags = 0;
+	return NULL;
+}
+#endif /* VENDOR_EDIT */
+
 /**
  * radix_tree_chunk_size - get current chunk size
  *
  * @iter:	pointer to radix tree iterator
  * Returns:	current chunk size
  */
+#ifndef VENDOR_EDIT 
+//yixue.ge@bsp.drv 20160810 modify for kernel patch aedc40f43507f76ac6dc176e610ae606b76c99a3
 static __always_inline unsigned
+#else
+static __always_inline long
+#endif
 radix_tree_chunk_size(struct radix_tree_iter *iter)
 {
 	return iter->next_index - iter->index;
@@ -413,9 +440,15 @@ radix_tree_next_slot(void **slot, struct radix_tree_iter *iter, unsigned flags)
 			return slot + offset + 1;
 		}
 	} else {
+	#ifndef VENDOR_EDIT 
+	//yixue.ge@bsp.drv 20160810 modify for kernel patch aedc40f43507f76ac6dc176e610ae606b76c99a3
 		unsigned size = radix_tree_chunk_size(iter) - 1;
 
 		while (size--) {
+	#else
+		long size = radix_tree_chunk_size(iter);
+		while (--size > 0) {
+	#endif
 			slot++;
 			iter->index++;
 			if (likely(*slot))

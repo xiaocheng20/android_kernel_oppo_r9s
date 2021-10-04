@@ -168,7 +168,13 @@ enum usb_chg_type {
 	USB_DCP_CHARGER,
 	USB_CDP_CHARGER,
 	USB_PROPRIETARY_CHARGER,
+#ifndef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Modify for QCMM  Patch   solve  BUG 872157
 	USB_FLOATED_CHARGER,
+#else
+	USB_UNSUPPORTED_CHARGER,
+#endif /*VENDOR_EDIT*/
 };
 
 /**
@@ -222,6 +228,25 @@ enum usb_id_state {
 	USB_ID_GROUND = 0,
 	USB_ID_FLOAT,
 };
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+/**
+ * Used for different states involved in Floating charger detection.
+ *
+ * FLOATING_AS_SDP		This is used to detect floating charger as SDP
+ * FLOATING_AS_DCP		This is used to detect floating charger as DCP
+ * FLOATING_AS_INVALID		This is used to detect floating charger is not
+ *				supported and detects as INVALID
+ *
+ */
+enum floated_chg_type {
+	FLOATING_AS_SDP = 0,
+	FLOATING_AS_DCP,
+	FLOATING_AS_INVALID,
+};
+#endif /*VENDOR_EDIT*/
 
 /**
  * struct msm_otg_platform_data - platform device data
@@ -327,6 +352,11 @@ struct msm_otg_platform_data {
 	bool enable_streaming;
 	bool enable_axi_prefetch;
 	bool enable_sdp_typec_current_limit;
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for  QCMM  Patch   solve  BUG 872157
+	enum floated_chg_type enable_floated_charger;
+#endif /*VENDOR_EDIT*/
 };
 
 /* phy related flags */
@@ -551,6 +581,19 @@ struct msm_otg {
 	int pm_qos_latency;
 	struct pm_qos_request pm_qos_req_dma;
 	struct delayed_work perf_vote_work;
+	
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/09/02
+// Add for otg switch
+	bool otg_online;
+	bool otg_switch;
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2016/11/10
+// Add for QCMM  Patch   solve  BUG 872157
+	bool is_ext_chg_detected;
+#endif /*VENDOR_EDIT*/
 };
 
 struct ci13xxx_platform_data {

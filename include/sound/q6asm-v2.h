@@ -171,6 +171,10 @@ struct audio_client {
 	int                    session;
 	app_cb		       cb;
 	atomic_t	       cmd_state;
+    #ifdef VENDOR_EDIT
+    //Jianfeng.Qiu@Multimedia.AudioDriver.Machine, 2016/10/24, Add for qcom patch to solve bug865265
+    atomic_t	       cmd_state_pp;
+    #endif /* VENDOR_EDIT */
 	/* Relative or absolute TS */
 	atomic_t	       time_flag;
 	atomic_t	       nowait_cmd_cnt;
