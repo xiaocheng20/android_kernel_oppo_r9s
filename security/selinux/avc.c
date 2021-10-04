@@ -34,6 +34,17 @@
 #include "avc_ss.h"
 #include "classmap.h"
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.SELinux, 2016/11/11, add for reduce denied log
+#include <linux/spinlock.h>
+#define MAX_AUDIT_RECORD    2
+static DEFINE_SPINLOCK(uid_lock);
+static int record_index = 0;
+static uid_t last_uid[MAX_AUDIT_RECORD] = {0, };
+static int granted_index = 0;
+static uid_t last_granted[MAX_AUDIT_RECORD] = {0, };
+#endif /* VENDOR_EDIT */
+
 #define AVC_CACHE_SLOTS			512
 #define AVC_DEF_CACHE_THRESHOLD		512
 #define AVC_CACHE_RECLAIM		16
@@ -715,6 +726,10 @@ static void avc_audit_pre_callback(struct audit_buffer *ab, void *a)
 	avc_dump_av(ab, ad->selinux_audit_data->tclass,
 			ad->selinux_audit_data->audited);
 	audit_log_format(ab, " for ");
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.SELinux, 2016/11/11, add for reduce denied log
+	audit_log_format(ab, "uid=%u ", __kuid_val(current_fsuid()));
+#endif /* VENDOR_EDIT */
 }
 
 /**
@@ -744,6 +759,11 @@ noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 {
 	struct common_audit_data stack_data;
 	struct selinux_audit_data sad;
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.SELinux, 2016/11/11, add for reduce denied log
+	int i;
+	uid_t curr_uid;
+#endif /* VENDOR_EDIT */
 
 	if (!a) {
 		a = &stack_data;
@@ -760,6 +780,37 @@ noinline int slow_avc_audit(u32 ssid, u32 tsid, u16 tclass,
 	if ((a->type == LSM_AUDIT_DATA_INODE) &&
 	    (flags & MAY_NOT_BLOCK))
 		return -ECHILD;
+
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.SELinux, 2016/11/11, add for reduce denied log
+	if (!spin_trylock(&uid_lock))
+		return 0;
+	curr_uid = __kuid_val(current_fsuid());
+	if (denied) {
+		for (i = 0; i < MAX_AUDIT_RECORD; i++) {
+			if (last_uid[i] == curr_uid) {
+				spin_unlock(&uid_lock);
+				return 0;
+			}
+		}
+		last_uid[record_index] = curr_uid;
+		record_index++;
+		if (record_index == MAX_AUDIT_RECORD)
+			record_index = 0;
+	} else {
+		for (i = 0; i < MAX_AUDIT_RECORD; i++) {
+			if (last_granted[i] == curr_uid) {
+				spin_unlock(&uid_lock);
+				return 0;
+			}
+		}
+		last_granted[granted_index] = curr_uid;
+		granted_index++;
+		if (granted_index == MAX_AUDIT_RECORD)
+			granted_index = 0;
+	}
+	spin_unlock(&uid_lock);
+#endif /* VENDOR_EDIT */
 
 	sad.tclass = tclass;
 	sad.requested = requested;
