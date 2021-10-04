@@ -624,7 +624,10 @@ int msm_camera_set_gpio_table(struct msm_gpio_set_tbl *gpio_tbl,
 	}
 	return rc;
 }
-
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20161003 for cam vio ctrl*/
+extern bool IsEnable_cam_vio;
+#endif
 int msm_camera_config_single_vreg(struct device *dev,
 	struct camera_vreg_t *cam_vreg, struct regulator **reg_ptr, int config)
 {
@@ -687,6 +690,14 @@ int msm_camera_config_single_vreg(struct device *dev,
 				vreg_name);
 			goto vreg_unconfig;
 		}
+
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20161003 for cam vio ctrl*/
+		if (strcmp(vreg_name, "cam_vio") == 0) {
+			pr_info("%s: %d enable cam_vio\n", __func__, __LINE__);
+			IsEnable_cam_vio = true;
+		}
+#endif
 	} else {
 		CDBG("%s disable %s\n", __func__, vreg_name);
 		if (*reg_ptr) {
@@ -700,6 +711,14 @@ int msm_camera_config_single_vreg(struct device *dev,
 			}
 			regulator_put(*reg_ptr);
 			*reg_ptr = NULL;
+
+#ifdef VENDOR_EDIT
+/*Add by Zhengrong.Zhang@Camera 20161003 for cam vio ctrl*/
+			if (strcmp(vreg_name, "cam_vio") == 0) {
+				pr_info("%s: %d disable cam_vio\n", __func__, __LINE__);
+				IsEnable_cam_vio = false;
+			}
+#endif
 		} else {
 			pr_err("%s can't disable %s\n", __func__, vreg_name);
 		}

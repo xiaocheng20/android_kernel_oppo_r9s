@@ -461,6 +461,22 @@ static int msm_gpio_get(struct gpio_chip *chip, unsigned offset)
 	return !!(val & BIT(g->in_bit));
 }
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+static int msm_gpio_get_oppo_vooc(struct gpio_chip *chip, unsigned offset)
+{
+	const struct msm_pingroup *g;
+	struct msm_pinctrl *pctrl = container_of(chip, struct msm_pinctrl, chip);
+	u32 val;
+	
+	//pr_err("%s enter\n", __func__);
+	g = &pctrl->soc->groups[offset];
+
+	val = readl_oppo_vooc(pctrl->regs + g->io_reg);
+	return !!(val & BIT(g->in_bit));
+}
+#endif /* VENDOR_EDIT */
+
 static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 {
 	const struct msm_pingroup *g;
@@ -481,6 +497,30 @@ static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 
 	spin_unlock_irqrestore(&pctrl->lock, flags);
 }
+
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+static void msm_gpio_set_oppo_vooc(struct gpio_chip *chip, unsigned offset, int value)
+{
+	const struct msm_pingroup *g;
+	struct msm_pinctrl *pctrl = container_of(chip, struct msm_pinctrl, chip);
+	u32 val;
+	
+	//pr_err("%s enter\n", __func__);
+	g = &pctrl->soc->groups[offset];
+
+	//spin_lock_irqsave(&pctrl->lock, flags);
+
+	val = readl_oppo_vooc(pctrl->regs + g->io_reg);
+	if (value)
+		val |= BIT(g->out_bit);
+	else
+		val &= ~BIT(g->out_bit);
+	writel_oppo_vooc(val, pctrl->regs + g->io_reg);
+
+	//spin_unlock_irqrestore(&pctrl->lock, flags);
+}
+#endif /* VENDOR_EDIT */
 
 static int msm_gpio_request(struct gpio_chip *chip, unsigned offset)
 {
@@ -550,7 +590,15 @@ static struct gpio_chip msm_gpio_template = {
 	.direction_input  = msm_gpio_direction_input,
 	.direction_output = msm_gpio_direction_output,
 	.get              = msm_gpio_get,
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+	.get_oppo_vooc	  = msm_gpio_get_oppo_vooc,
+#endif /* VENDOR_EDIT */
 	.set              = msm_gpio_set,
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016-01-19 add for oppo vooc adapter update
+	.set_oppo_vooc	  = msm_gpio_set_oppo_vooc,
+#endif /* VENDOR_EDIT */
 	.request          = msm_gpio_request,
 	.free             = msm_gpio_free,
 	.dbg_show         = msm_gpio_dbg_show,

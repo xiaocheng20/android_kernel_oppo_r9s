@@ -125,6 +125,12 @@ bool lpm_cpu_mode_allow(unsigned int cpu,
 bool lpm_cluster_mode_allow(struct lpm_cluster *cluster,
 		unsigned int mode, bool from_idle);
 uint32_t *get_per_cpu_max_residency(int cpu);
+#ifdef VENDOR_EDIT
+//xiaocheng.li@Swdp.shanghai, 2015/11/9, Enable scoring lpm governor
+void lpm_use_governor(bool is_use);
+void lpm_disable_sleep(bool is_use);
+#endif
+
 extern struct lpm_cluster *lpm_root_node;
 
 #ifdef CONFIG_SMP

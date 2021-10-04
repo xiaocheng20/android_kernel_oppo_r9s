@@ -26,6 +26,39 @@
 #include "mdss_dsi.h"
 #include "mdss_dba_utils.h"
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@PhoneSW.Multimedia, 2014/08/19  Add for 14023 project */
+#include <linux/switch.h>
+#include <soc/oppo/device_info.h>
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/04/01  Add for 15009 close cont splash in factory mode */
+#include <soc/oppo/boot_mode.h>
+#include <soc/oppo/oppo_project.h>
+int lcd_dev=0;
+static uint print_bl = 0;
+static uint is_samsung430nit = 1;
+static uint enable_samsung_highbl = 0;
+static uint current_bl = 0;
+#endif /*CONFIG_VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+//liping-m@SWDP.MultiMedia, 2016/08/11,  Add for 16061 LM3697 Backlight
+extern int init_lm3697_backlight_reg(void);
+extern void set_lm3697_backlight_gpio(unsigned int value);
+extern int lm3697_lcd_backlight_set_level(unsigned int bl_level);
+extern int set_lm3697_backlight_scale_current(void);
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+//Shengjun.Gou@Multimedia.Driver.Statbility, 2016/10/09,
+//add for get black gesture on/off status
+extern int is_gesture_enable_for_lcd(void);
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+//HaoWang@BSP.Driver.TP, 2016/10/09, add for finger protect
+extern void lcd_wakeup_finger_protect(bool wakeup);
+#endif  /*VENDOR_EDIT*/
+
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 48
 #define DEFAULT_MDP_TRANSFER_TIME 14000
@@ -33,6 +66,10 @@
 #define VSYNC_DELAY msecs_to_jiffies(17)
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/01  Add for ESD */
+struct mdss_dsi_ctrl_pdata *gl_ctrl_pdata;
+#endif /*VENDOR_EDIT*/
 
 void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -200,14 +237,44 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	struct dcs_cmd_req cmdreq;
 	struct mdss_panel_info *pinfo;
 
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/04/03  Add for  close cont splash in factory mode */
+    if(is_project(OPPO_16017)&&(lcd_dev == LCD_16017_SAMSUNG_EA8064_FHD_VIDEO)){
+         if ((MSM_BOOT_MODE__FACTORY == get_boot_mode()) ||
+               (MSM_BOOT_MODE__MOS == get_boot_mode())){
+                 return;
+         }
+    }
+/* YongPeng.Yi@SWDP.MultiMedia END */
+#endif /*VENDOR_EDIT*/
 	pinfo = &(ctrl->panel_data.panel_info);
 	if (pinfo->dcs_cmd_by_left) {
 		if (ctrl->ndx != DSI_CTRL_LEFT)
 			return;
 	}
 
-	pr_debug("%s: level=%d\n", __func__, level);
-
+#ifndef VENDOR_EDIT
+    /* YongPeng.Yi@SWDP.MultiMedia, 2016/03/29  Add for print bl leve 3 times */
+        pr_err("%s: yxq level=%d\n", __func__, level);
+#else /*VENDOR_EDIT*/
+        if(print_bl < 3){
+            pr_err("%s: level=%d\n", __func__, level);
+            print_bl++;
+        }
+#endif /*VEDNOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* Goushengjun@SWDP.MultiMedia, 2016/07/20  Add for adjust backlight*/
+        current_bl = level;
+        if(is_samsung430nit){
+            if(!(enable_samsung_highbl && (level == 255))){
+                // Xinqin.Yang@Camera, 2016-08-12, when enter gallery, the backlight become  brighter surddenly, so no longer restrict brightness
+                //level = level * 80 / 100;
+                pr_debug("yxq BackLight set to 80 percent:%d\n", level);
+            }else{
+                pr_debug("yxq BackLight set to 100 percent:%d\n", level);
+            }
+        }
+#endif /*VENDOR_EDIT*/
 	led_pwm1[1] = (unsigned char)level;
 
 	memset(&cmdreq, 0, sizeof(cmdreq));
@@ -219,6 +286,331 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
+
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/07/28  Add for LCD hbm function */
+bool flag_lcd_off = false;
+
+static DEFINE_MUTEX(lcd_mutex);
+
+static char set_hbm[2] = {0x53, 0x20};  /* DTYPE_DCS_WRITE1 */
+static struct dsi_cmd_desc set_hbm_cmd = {
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(set_hbm)},
+    set_hbm
+};
+enum
+{
+    HBM_OFF = 0,
+    HBM_ON,
+};
+
+int hbm_mode = HBM_OFF; //default mode off
+
+void set_hbm_mode(int level)
+{
+    struct dcs_cmd_req cmdreq;
+
+    if(!is_project(OPPO_16017))  /*OPPO_16017 Enable*/
+        return;
+
+    pr_err("%s: yxq level=%d\n", __func__, level);
+    if(level < 0 || level > 3){
+        pr_err("%s: invalid input %d! \n",__func__,level);
+        return;
+    }
+
+    mutex_lock(&lcd_mutex);
+    if(flag_lcd_off == true){
+        printk(KERN_INFO "lcd is off,don't allow to set hbm !\n");
+        mutex_unlock(&lcd_mutex);
+        return;
+    }
+
+    /* Xinqin.Yang@Camera, modify for hbm mode begin */
+    switch(level)
+    {
+        case 0:         /*off 405nit*/
+            enable_samsung_highbl = 0;
+            hbm_mode = HBM_OFF;
+		    set_hbm[1] = 0x20;
+            break;
+        case 1:         /*for front camera HBM*/
+			enable_samsung_highbl = 0;
+            hbm_mode = HBM_ON;
+			set_hbm[1] = 0xe0;
+            break;
+        case 2:         /*for back camera on 405nit*/
+            enable_samsung_highbl = 1;
+		    hbm_mode = HBM_OFF;
+			set_hbm[1] = 0x20;
+            break;
+        case 3:         /*for 30000lux HBM*/
+            enable_samsung_highbl = 1;
+            hbm_mode = HBM_ON;
+			set_hbm[1] = 0xe0;
+            break;
+        default:
+            break;
+    }
+    memset(&cmdreq, 0, sizeof(cmdreq));
+    cmdreq.cmds = &set_hbm_cmd;
+    cmdreq.cmds_cnt = 1;
+    cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+    cmdreq.rlen = 0;
+    cmdreq.cb = NULL;
+
+    pr_err("%s yxq enable_samsung_highbl = %d, hbm_mode = %d\n", __func__, enable_samsung_highbl, hbm_mode);
+    mdss_dsi_cmdlist_put(gl_ctrl_pdata, &cmdreq);
+
+	mdss_dsi_panel_bklt_dcs(gl_ctrl_pdata, current_bl);
+    /* Xinqin.Yang@Camera, modify end */
+
+    mutex_unlock(&lcd_mutex);
+}
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+//YongPeng.Yi@SWDP.MultiMedia, 2016/05/26,  Add for test esd check
+static char set_esd[2] = {0x10, 0x00};  /* DTYPE_DCS_WRITE1 */
+static struct dsi_cmd_desc set_esd_cmd = {
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(set_esd)},
+    set_esd
+};
+void set_esd_mode(int level)
+{
+    struct dcs_cmd_req cmdreq;
+
+    mutex_lock(&lcd_mutex);
+    if(flag_lcd_off == true)
+    {
+        printk(KERN_INFO "lcd is off,don't allow to set esd !\n");
+        mutex_unlock(&lcd_mutex);
+        return;
+    }
+
+    switch(level)
+    {
+        case 0:     /*for esd*/
+        set_esd[1] = 0x00;
+            break;
+        default:
+            break;
+    }
+
+    memset(&cmdreq, 0, sizeof(cmdreq));
+    cmdreq.cmds = &set_esd_cmd;
+    cmdreq.cmds_cnt = 1;
+    cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+    cmdreq.rlen = 0;
+    cmdreq.cb = NULL;
+
+    mdss_dsi_cmdlist_put(gl_ctrl_pdata, &cmdreq);
+
+    mutex_unlock(&lcd_mutex);
+}
+
+#endif /*VENDOR_EDIT*/
+
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+enum
+{
+	CABC_CLOSE = 0,
+	CABC_UI_MODE,
+	CABC_IMAGE_MODE,
+	CABC_VIDEO_MODE,
+};
+int cabc_mode = CABC_VIDEO_MODE;
+int set_cabc(int level)
+{
+    int ret = 0;
+
+	/* This function only for 16017, display tuning use QDCM, not panel driver IC, so close this interface */
+	return 0;
+	pr_err("%s : %d \n",__func__,level);
+
+    mutex_lock(&lcd_mutex);
+
+	if(flag_lcd_off == true)
+    {
+        printk(KERN_INFO "lcd is off,don't allow to set cabc\n");
+        cabc_mode = level;
+        mutex_unlock(&lcd_mutex);
+        return 0;
+    }
+	pr_err("%s level = %d\n", __func__, level);
+
+    if (level > 0) {
+		cabc_mode = CABC_VIDEO_MODE;
+		mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->all_off_cmds, CMD_REQ_COMMIT);
+    } else {
+		cabc_mode = CABC_CLOSE;
+		mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->skin_crc_cmds, CMD_REQ_COMMIT);
+    }
+
+    mutex_unlock(&lcd_mutex);
+    return ret;
+}
+
+int set_cabc_16027(int level)
+{
+    int ret = 0;
+
+    mutex_lock(&lcd_mutex);
+
+    if(flag_lcd_off == true)
+    {
+        printk(KERN_INFO "lcd is off,don't allow to set cabc\n");
+        cabc_mode = level;
+        mutex_unlock(&lcd_mutex);
+        return 0;
+    }
+
+    pr_info("%s : cabc mode: %d \n",__func__,level);
+
+    switch (level) {
+        case CABC_CLOSE:
+            mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->cabc_close_cmds, CMD_REQ_COMMIT);
+            break;
+        case CABC_UI_MODE:
+            mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->cabc_ui_mode_cmds, CMD_REQ_COMMIT);
+            break;
+        case CABC_IMAGE_MODE:
+            mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->cabc_image_mode_cmds, CMD_REQ_COMMIT);
+            break;
+        case CABC_VIDEO_MODE:
+            mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->cabc_video_mode_cmds, CMD_REQ_COMMIT);
+            break;
+
+        default:
+            pr_err("%s : Unsupported CABC MODE!\n",__func__);
+            mutex_unlock(&lcd_mutex);
+            return -1;
+    }
+
+    cabc_mode = level;
+
+    mutex_unlock(&lcd_mutex);
+    return ret;
+}
+static int set_cabc_resume_mode(int mode)
+{
+    int ret;
+	if(!(is_project(OPPO_16017))){
+		return 0;
+	}
+	pr_err("%s : cabc_mode: %d\n",__func__,mode);
+
+	if (mode > 0) {
+		pr_err("%s yxq no need to send all off cmds, it is the same with init cmds.\n", __func__);
+		//mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->all_off_cmds, CMD_REQ_COMMIT);
+    } else {
+		mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->skin_crc_cmds, CMD_REQ_COMMIT);
+    }
+
+    return ret;
+}
+
+
+//LiPing-M@SWDP.MultiMedia, 2016/08/23, Add for hx8394f cabc
+static char set_cabc_mode[2] = {0x55, 0x01};  /* DTYPE_DCS_WRITE1 */
+static char set_cabc_dimming[2] = {0x53, 0x2c};  /* DTYPE_DCS_WRITE1 */
+
+static struct dsi_cmd_desc set_cabc_mode_cmd[] = {
+	{{DTYPE_DCS_WRITE1, 0, 0, 0, 1, sizeof(set_cabc_mode)}, set_cabc_mode},
+	{{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(set_cabc_dimming)}, set_cabc_dimming},
+};
+void set_hx8394f_cabc_mode(int level)
+{
+    struct dcs_cmd_req cmdreq;
+
+    mutex_lock(&lcd_mutex);
+    if(flag_lcd_off == true)
+    {
+        printk(KERN_INFO "lcd is off,don't allow to set cabc !\n");
+        cabc_mode = level;
+        mutex_unlock(&lcd_mutex);
+        return;
+    }
+
+    if(level==1){
+        set_cabc_mode[1] = 0x01;
+        cabc_mode = CABC_UI_MODE;
+    }else if(level==2){
+        set_cabc_mode[1] = 0x02;
+        cabc_mode = CABC_IMAGE_MODE;
+    }else if(level==3){
+        set_cabc_mode[1] = 0x03;
+        cabc_mode = CABC_VIDEO_MODE;
+    }else{
+        set_cabc_mode[1] = 0x00;
+        cabc_mode = CABC_CLOSE;
+    }
+	set_cabc_mode_cmd[0].payload = set_cabc_mode;
+	set_cabc_mode_cmd[1].payload = set_cabc_dimming;
+
+    memset(&cmdreq, 0, sizeof(cmdreq));
+    cmdreq.cmds = set_cabc_mode_cmd;
+    cmdreq.cmds_cnt = 2;
+    cmdreq.flags = CMD_REQ_COMMIT | CMD_CLK_CTRL;
+    cmdreq.rlen = 0;
+    cmdreq.cb = NULL;
+
+    mdss_dsi_cmdlist_put(gl_ctrl_pdata, &cmdreq);
+
+    mutex_unlock(&lcd_mutex);
+}
+#endif
+
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-08-08, add for LBR */
+
+int lbr_level = 0;
+int set_lbr(void)
+{
+    int ret = 0;
+	char lbr_mode_select = 0x00;  // on:0x80;  off:0x00;
+	char lbr_mode_step = 0x00;  // step 0(mix): 0x00;  step 63(max): 0x3f
+
+	if(!(is_project(OPPO_16017))){
+		return 0;
+	}
+
+    mutex_lock(&lcd_mutex);
+
+	if(flag_lcd_off == true)
+    {
+        printk(KERN_INFO "lcd is off,don't allow to set lbr\n");
+        mutex_unlock(&lcd_mutex);
+        return 0;
+    }
+
+	if (lbr_level > 63) {
+		lbr_level = 63;
+	} else if (lbr_level < 0) {
+	    lbr_level = 0;
+	}
+
+    if (lbr_level > 0) {
+		lbr_mode_select = 0x80;
+    } else {
+		lbr_mode_select = 0x00;
+    }
+
+	lbr_mode_step = (char)lbr_level;
+	pr_err("%s lbr_mode_step = 0x%x\n", __func__, lbr_mode_step);
+
+	gl_ctrl_pdata->lbr_cmds.cmds[2].payload[1] = lbr_mode_select;
+	gl_ctrl_pdata->lbr_cmds.cmds[4].payload[1] = lbr_mode_step;
+
+	mdss_dsi_panel_cmds_send(gl_ctrl_pdata, &gl_ctrl_pdata->lbr_cmds, CMD_REQ_COMMIT);
+
+    mutex_unlock(&lcd_mutex);
+    return ret;
+}
+
+#endif
+
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -248,14 +640,16 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto bklt_en_gpio_err;
 		}
 	}
+
 	if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
 		rc = gpio_request(ctrl_pdata->mode_gpio, "panel_mode");
 		if (rc) {
-			pr_err("request panel mode gpio failed,rc=%d\n",
+			pr_err("request panel panel mode failed,rc=%d\n",
 								rc);
-			goto mode_gpio_err;
+			goto  mode_gpio_err;
 		}
 	}
+
 	return rc;
 
 mode_gpio_err:
@@ -312,7 +706,51 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_err("gpio request failed\n");
 			return rc;
 		}
+#ifdef VENDOR_EDIT
+    /* YongPeng.Yi@SWDP.MultiMedia, 2016/03/29  Add for print bl leve 5times */
+        print_bl = 0;
+#endif /*VENDOR_EDIT*/
 		if (!pinfo->cont_splash_enabled) {
+if(is_project(OPPO_16061)){
+#ifdef VENDOR_EDIT
+/* liping-m@SWDP.MultiMedia, 2016/08/22  Add for 16061 modify LCD time series*/
+					set_lm3697_backlight_gpio(1);
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+					gpio_set_value((ctrl_pdata->disp_en_gpio), 1);   //+5V
+					mdelay(2);
+				if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
+					gpio_set_value((ctrl_pdata->bklt_en_gpio), 1);   //-5v
+					mdelay(5);
+				for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
+					gpio_set_value((ctrl_pdata->rst_gpio),
+					pdata->panel_info.rst_seq[i]);
+					if (pdata->panel_info.rst_seq[++i])
+						mdelay(pinfo->rst_seq[i]);
+				}
+/* liping-m@SWDP.MultiMedia END */
+#endif /*VENDOR_EDIT*/
+} else if(is_project(OPPO_16027)) {
+#ifdef VENDOR_EDIT
+//Shengjun.Gou@Phone.Multimedia.Driver.Display.LCD.Stability, 2016/09/20,
+//add for 16027 lcd power up
+                set_lm3697_backlight_gpio(1);
+                if (gpio_is_valid(ctrl_pdata->ldo_1p8_gpio))
+                    gpio_set_value((ctrl_pdata->ldo_1p8_gpio), 1);   //1.8v
+                mdelay(2);
+                if (gpio_is_valid(ctrl_pdata->disp_en_gpio))
+                    gpio_set_value((ctrl_pdata->disp_en_gpio), 1);   //+5V
+                mdelay(2);
+                if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
+                    gpio_set_value((ctrl_pdata->bklt_en_gpio), 1);   //-5v
+                mdelay(15);
+                for (i = 0; i < pdata->panel_info.rst_seq_len; ++i) {
+                    gpio_set_value((ctrl_pdata->rst_gpio),
+                    pdata->panel_info.rst_seq[i]);
+                    if (pdata->panel_info.rst_seq[++i])
+                    mdelay(pinfo->rst_seq[i]);
+                }
+#endif /*VENDOR_EDIT*/
+}else{
 			if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 				rc = gpio_direction_output(
 					ctrl_pdata->disp_en_gpio, 1);
@@ -322,6 +760,11 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 					goto exit;
 				}
 			}
+
+			#ifdef VENDOR_EDIT
+			/* ShengJun.Gou@SWDP.MultiMedia, 2016/01/07  Add for 16017 lcd power up */
+			mdelay(5);
+			#endif /*VENDOR_EDIT*/
 
 			if (pdata->panel_info.rst_seq_len) {
 				rc = gpio_direction_output(ctrl_pdata->rst_gpio,
@@ -350,6 +793,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 				}
 			}
 		}
+		}
 
 		if (gpio_is_valid(ctrl_pdata->mode_gpio)) {
 			bool out = false;
@@ -373,20 +817,79 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			pr_debug("%s: Reset panel done\n", __func__);
 		}
 	} else {
+if(is_project(OPPO_16061)){
+#ifdef VENDOR_EDIT
+/* liping-m@SWDP.MultiMedia, 2016/08/22  Add for 16061 modify LCD time series*/
+				set_lm3697_backlight_gpio(0);
+				mdelay(5);
+				gpio_set_value((ctrl_pdata->rst_gpio), 0);
+				gpio_free(ctrl_pdata->rst_gpio);
+				mdelay(3);
+				if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
+				gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
+				gpio_free(ctrl_pdata->bklt_en_gpio);
+				}
+				mdelay(3);
+				if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+				gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+				gpio_free(ctrl_pdata->disp_en_gpio);
+				}
+				mdelay(5);
+				if (gpio_is_valid(ctrl_pdata->ldo_1p8_gpio))
+					gpio_set_value((ctrl_pdata->ldo_1p8_gpio), 0);
+				gpio_free(ctrl_pdata->ldo_1p8_gpio);
+/* liping-m@SWDP.MultiMedia END */
+#endif /*VENDOR_EDIT*/
+} else if(is_project(OPPO_16027)){
+#ifdef VENDOR_EDIT
+//Shengjun.Gou@Phone.Multimedia.Driver.Display.LCD.Stability, 2016/09/20,
+//add for 16027 lcd power down
+                set_lm3697_backlight_gpio(0);
+                if (is_gesture_enable_for_lcd()) {
+                    gpio_free(ctrl_pdata->rst_gpio);
+                    gpio_free(ctrl_pdata->bklt_en_gpio);
+                    gpio_free(ctrl_pdata->disp_en_gpio);
+                } else {
+                    gpio_set_value((ctrl_pdata->rst_gpio), 0);
+                    gpio_free(ctrl_pdata->rst_gpio);
+                    mdelay(6);
+                    if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
+                        gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
+                        gpio_free(ctrl_pdata->bklt_en_gpio);
+                    }
+                    mdelay(15);
+                    if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
+                        gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
+                        gpio_free(ctrl_pdata->disp_en_gpio);
+                    }
+                    mdelay(2);
+                    if (gpio_is_valid(ctrl_pdata->ldo_1p8_gpio)) {
+                        gpio_set_value((ctrl_pdata->ldo_1p8_gpio), 0);
+                        gpio_free(ctrl_pdata->ldo_1p8_gpio);
+                    }
+                }
+#endif /*VENDOR_EDIT*/
+}else{
 		if (gpio_is_valid(ctrl_pdata->bklt_en_gpio)) {
 			gpio_set_value((ctrl_pdata->bklt_en_gpio), 0);
 			gpio_free(ctrl_pdata->bklt_en_gpio);
 		}
+
+#ifdef VENDOR_EDIT
+/* ShengJun.Gou@SWDP.MultiMedia, 2015/12/07  Add for 16017 power down */
+		gpio_set_value((ctrl_pdata->rst_gpio), 0);
+		mdelay(10);
 		if (gpio_is_valid(ctrl_pdata->disp_en_gpio)) {
 			gpio_set_value((ctrl_pdata->disp_en_gpio), 0);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
-		gpio_set_value((ctrl_pdata->rst_gpio), 0);
+#endif /*VENDOR_EDIT*/
+
 		gpio_free(ctrl_pdata->rst_gpio);
 		if (gpio_is_valid(ctrl_pdata->mode_gpio))
 			gpio_free(ctrl_pdata->mode_gpio);
 	}
-
+}
 exit:
 	return rc;
 }
@@ -641,6 +1144,11 @@ static void mdss_dsi_panel_switch_mode(struct mdss_panel_data *pdata,
 		mdss_dsi_panel_dsc_pps_send(ctrl_pdata, &pdata->panel_info);
 }
 
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2015/06/03  Add for silence mode */
+extern int lcd_closebl_flag;
+#endif /*VENDOR_EDIT*/
+
 static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 							u32 bl_level)
 {
@@ -651,6 +1159,13 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		pr_err("%s: Invalid input data\n", __func__);
 		return;
 	}
+
+#ifdef VENDOR_EDIT
+    if(lcd_closebl_flag){ /* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2015/05/28  Add for silence mode */
+        pr_err("%s -- MSM_BOOT_MODE__SILENCE\n",__func__);
+        bl_level = 0;
+    }
+#endif
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
@@ -664,6 +1179,18 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	if ((bl_level < pdata->panel_info.bl_min) && (bl_level != 0))
 		bl_level = pdata->panel_info.bl_min;
 
+#ifdef VENDOR_EDIT
+//LiPing-M@SWDP.MultiMedia, 2016/08/11,  Add for 16061 backlight BL
+   if(is_project(OPPO_16061) || is_project(OPPO_16027)){
+#ifdef OPPO_CTTEST_FLAG
+//LiPing@MultiMedia.Display.LCD.Stability, 2016/10/13
+//add for ct test backlight
+    bl_level = bl_level * 49 / 100;
+#endif
+          lm3697_lcd_backlight_set_level(bl_level);
+          return;
+    }
+#endif
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
@@ -701,7 +1228,11 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 		break;
 	}
 }
-
+#ifdef VENDOR_EDIT
+//LiPing@MultiMedia.Display.LCD.Stability, 2016/12/1
+//Add for backlight set reg fist
+static int reg_init_flag = 0;
+#endif /* VENDOR_EDIT */
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
@@ -740,11 +1271,40 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (pinfo->compression_mode == COMPRESSION_DSC)
 		mdss_dsi_panel_dsc_pps_send(ctrl, pinfo);
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+    if(is_project(OPPO_16017)){
+		set_cabc_resume_mode(cabc_mode);
+	}
+/*liping-m@SWDP.MultiMedia, 2016/08/22,  Add for 16061 LM3697 Backlight reg init*/
+   if(is_project(OPPO_16061) || is_project(OPPO_16027)){
+       if(reg_init_flag ==1){
+	    init_lm3697_backlight_reg();
+		if((lcd_dev == LCD_16061_TRULY_NT35521S_HD_VIDEO)
+			|| (lcd_dev == LCD_16061_TRULY_HX8394F_NEW_HD_VIDEO)){
+		set_lm3697_backlight_scale_current();
+		}
+	   }
+	}
+#endif
+
 	if (ctrl->ds_registered)
 		mdss_dba_utils_video_on(pinfo->dba_data, pinfo);
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/02  Add for ESD */
+    mutex_lock(&lcd_mutex);
+    flag_lcd_off = false;
+    mutex_unlock(&lcd_mutex);
+#endif /*VENDOR_EDIT*/
 end:
 	pr_debug("%s:-\n", __func__);
-	return ret;
+#ifdef VENDOR_EDIT
+//HaoWang@BSP.Driver.TP, 2016/10/09, add for finger protect
+    if(is_project(OPPO_16027)) {
+        lcd_wakeup_finger_protect(true);
+    }
+#endif  /*VENDOR_EDIT*/
+    return ret;
 }
 
 static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
@@ -814,9 +1374,22 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		mdss_dba_utils_video_off(pinfo->dba_data);
 		mdss_dba_utils_hdcp_enable(pinfo->dba_data, false);
 	}
+#ifdef VENDOR_EDIT
+    /* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/08/02  Add for ESD */
+    mutex_lock(&lcd_mutex);
+    flag_lcd_off = true;
+    reg_init_flag = 1;
+    mutex_unlock(&lcd_mutex);
+#endif /*VENDOR_EDIT*/
 
 end:
 	pr_debug("%s:-\n", __func__);
+#ifdef VENDOR_EDIT
+//HaoWang@BSP.Driver.TP, 2016/10/09, add for finger protect
+    if(is_project(OPPO_16027)) {
+        lcd_wakeup_finger_protect(false);
+    }
+#endif  /*VENDOR_EDIT*/
 	return 0;
 }
 
@@ -1456,8 +2029,14 @@ static bool mdss_dsi_cmp_panel_reg_v2(struct mdss_dsi_ctrl_pdata *ctrl)
 	for (j = 0; j < ctrl->groups; ++j) {
 		for (i = 0; i < len; ++i) {
 			if (ctrl->return_buf[i] !=
-				ctrl->status_value[group + i])
+				ctrl->status_value[group + i]){
+#ifdef VENDOR_EDIT
+//liping-m@SWDP.MultiMedia, 2016/08/22, Modify for print lcd esd check reg value
+            pr_err("%s: Read back Value is [0x%x] is not equal to status Value 0x%x.\n",
+                    __func__, ctrl->return_buf[i], ctrl->status_value[group + i]);
+#endif /*VEDNOR_EDIT*/
 				break;
+				}
 		}
 
 		if (i == len)
@@ -1478,6 +2057,40 @@ static int mdss_dsi_gen_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		return 1;
 	}
 }
+
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2016/01/12  Add for Ftm Mode */
+void set_panel_off(int value)
+{
+    int rc = 0;
+
+    pr_err("%s: set_panel_off \n", __func__);
+
+    rc = gpio_request(gl_ctrl_pdata->disp_en_gpio, "disp_enable");
+    if (rc) {
+    pr_err("request disp_en gpio failed, rc=%d\n", rc);
+    }
+    rc = gpio_request(gl_ctrl_pdata->rst_gpio, "disp_rst_n");
+    if (rc) {
+    pr_err("request reset gpio failed, rc=%d\n", rc);
+    }
+
+    rc = gpio_direction_output(gl_ctrl_pdata->disp_en_gpio, 1);
+    if (rc) {
+    pr_err("%s: unable to set dir for disp_en gpio\n", __func__);
+    }
+
+    rc = gpio_direction_output(gl_ctrl_pdata->rst_gpio, 1);
+    if (rc) {
+    pr_err("%s: unable to set dir for rst gpio\n", __func__);
+    }
+
+    gpio_set_value((gl_ctrl_pdata->rst_gpio), 0);
+    gpio_set_value((gl_ctrl_pdata->disp_en_gpio), 0);
+    gpio_free(gl_ctrl_pdata->disp_en_gpio);
+    gpio_free(gl_ctrl_pdata->rst_gpio);
+}
+#endif /*VENDOR_EDIT*/
 
 static int mdss_dsi_nt35596_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -2501,6 +3114,35 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	mdss_dsi_parse_reset_seq(np, pinfo->rst_seq, &(pinfo->rst_seq_len),
 		"qcom,mdss-dsi-reset-sequence");
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+    if (is_project(OPPO_16017))
+    {
+		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->skin_crc_cmds,
+			"qcom,mdss-dsi-skin-crc-command", "qcom,mdss-dsi-off-command-state");
+		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->all_off_cmds,
+			"qcom,mdss-dsi-all-off-command", "qcom,mdss-dsi-off-command-state");
+		mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->lbr_cmds,
+			"qcom,mdss-dsi-lbr-command", "qcom,mdss-dsi-off-command-state");
+    }
+#endif
+
+#ifdef VENDOR_EDIT
+//Shengjun.Gou@Multimedia.Driver.Stability, 2016/10/31,
+//add for 16027 cabc
+    if (is_project(OPPO_16027))
+    {
+        mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_close_cmds,
+            "qcom,mdss-dsi-cabc-off-command", "qcom,mdss-dsi-off-command-state");
+        mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_ui_mode_cmds,
+            "qcom,mdss-dsi-cabc-ui-command", "qcom,mdss-dsi-off-command-state");
+        mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_image_mode_cmds,
+            "qcom,mdss-dsi-cabc-image-command", "qcom,mdss-dsi-off-command-state");
+        mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_video_mode_cmds,
+            "qcom,mdss-dsi-cabc-video-command", "qcom,mdss-dsi-off-command-state");
+    }
+#endif /*VENDOR_EDIT*/
+
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->off_cmds,
 		"qcom,mdss-dsi-off-command", "qcom,mdss-dsi-off-command-state");
 
@@ -2549,12 +3191,21 @@ int mdss_dsi_panel_init(struct device_node *node,
 	int rc = 0;
 	static const char *panel_name;
 	struct mdss_panel_info *pinfo;
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/09/23  Add for registe panel info */
+    static const char *panel_manufacture;
+    static const char *panel_version;
+#endif /*VENDOR_EDIT*/
 
 	if (!node || !ctrl_pdata) {
 		pr_err("%s: Invalid arguments\n", __func__);
 		return -ENODEV;
 	}
 
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/07/28  Add for lcd acl and hbm mode */
+    gl_ctrl_pdata = ctrl_pdata;
+#endif /*VENDOR_EDIT*/
 	pinfo = &ctrl_pdata->panel_data.panel_info;
 
 	pr_debug("%s:%d\n", __func__, __LINE__);
@@ -2567,6 +3218,70 @@ int mdss_dsi_panel_init(struct device_node *node,
 		pr_info("%s: Panel Name = %s\n", __func__, panel_name);
 		strlcpy(&pinfo->panel_name[0], panel_name, MDSS_MAX_PANEL_LEN);
 	}
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2015/06/11  Add for lcd type START */
+    if(!strcmp(panel_name,"oppo16017samsung ea8064 1080p video mode dsi panel")){
+        lcd_dev = LCD_16017_SAMSUNG_EA8064_FHD_VIDEO;
+        pr_err("lcd_dev is oppo16017samsung ea8064 1080p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16017samsung ea8064 1080p cmd mode dsi panel")){
+        lcd_dev = LCD_16017_SAMSUNG_EA8064_FHD_CMD;
+        pr_err("lcd_dev = oppo160173samsung ea8064 1080p cmd mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16027jdi r63452 1080p cmd mode dsi panel")){
+        lcd_dev = LCD_16027_JDI_R63452_FHD_CMD;
+        cabc_mode = CABC_IMAGE_MODE;
+        pr_info("lcd_dev = oppo16027jdi r63452 1080p cmd mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16027jdi r63452 1080p cmd mode dsi panel evt")){
+        lcd_dev = LCD_16027_JDI_R63452_FHD_CMD_EVT;
+        cabc_mode = CABC_IMAGE_MODE;
+        pr_info("lcd_dev = oppo16027jdi r63452 1080p cmd mode dsi evt panel\n");
+    }else if(!strcmp(panel_name,"oppo16061tianma hx8394f 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_TIANMA_HX8394F_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061tianma hx8394f 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061boe hx8394f 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_BOE_HX8394F_HD_VIDEO;
+		cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061boe hx8394f 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061truly hx8394f 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_TRULY_HX8394F_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061truly hx8394f 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061boe nt35521s 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_BOE_NT35521S_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061boe nt35521s 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061boe nt35521s b8 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_BOE_NT35521S_B8_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061boe nt35521s b8 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061truly nt35521s 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_TRULY_NT35521S_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061truly nt35521s 720p video mode dsi panel\n");
+    }else if(!strcmp(panel_name,"oppo16061truly hx8394f new 720p video mode dsi panel")){
+        lcd_dev = LCD_16061_TRULY_HX8394F_NEW_HD_VIDEO;
+        cabc_mode = CABC_UI_MODE;
+        pr_err("lcd_dev = oppo16061truly hx8394f new 720p video mode dsi panel\n");
+    }else{
+        lcd_dev = LCD_UNKNOW;
+        pr_err("lcd_dev is unkowned\n");
+    }
+#endif /*VENDOR_EDIT*/
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2014/09/23  Add for registe panel info */
+    panel_manufacture = of_get_property(node, "qcom,mdss-dsi-panel-manufacture", NULL);
+    if (!panel_manufacture)
+        pr_info("%s:%d, panel manufacture not specified\n", __func__, __LINE__);
+    else
+        pr_info("%s: Panel Manufacture = %s\n", __func__, panel_manufacture);
+    panel_version = of_get_property(node, "qcom,mdss-dsi-panel-version", NULL);
+    if (!panel_version)
+        pr_info("%s:%d, panel version not specified\n", __func__, __LINE__);
+    else
+        pr_info("%s: Panel Version = %s\n", __func__, panel_version);
+
+    register_device_proc("lcd", (char *)panel_version, (char *)panel_manufacture);
+#endif /*VENDOR_EDIT*/
 	rc = mdss_panel_parse_dt(node, ctrl_pdata);
 	if (rc) {
 		pr_err("%s:%d panel dt parse failed\n", __func__, __LINE__);

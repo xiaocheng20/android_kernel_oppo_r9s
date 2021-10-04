@@ -60,6 +60,15 @@
 #define CREATE_TRACE_POINTS
 #include "trace/lowmemorykiller.h"
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Performance.Memory, 2016/05/31, add for lowmemorykiller uevent
+static struct kobject *lmk_module_kobj = NULL;
+static struct work_struct lowmemorykiller_work;
+static char *lmklowmem[2] = { "LMK=LOWMEM", NULL };
+static int uevent_threshold[6] = {0, 0, 0, 0, }; // 1: 58, 2: 117, 3: 176
+static void lowmemorykiller_uevent(short adj, int index);
+#endif /* VENDOR_EDIT */
+
 static uint32_t lowmem_debug_level = 1;
 static short lowmem_adj[6] = {
 	0,
@@ -95,9 +104,14 @@ static unsigned long lowmem_count(struct shrinker *s,
 }
 
 static atomic_t shift_adj = ATOMIC_INIT(0);
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Performance.Memory, 2017/03/31, raise this value to reduce bg. app being killed
+static short adj_max_shift = 606;
+#else
 static short adj_max_shift = 353;
 module_param_named(adj_max_shift, adj_max_shift, short,
 	S_IRUGO | S_IWUSR);
+#endif /* VENDOR_EDIT */
 
 /* User knob to enable/disable adaptive lmk feature */
 static int enable_adaptive_lmk;
@@ -382,6 +396,20 @@ void tune_lmk_param(int *other_free, int *other_file, struct shrink_control *sc)
 	}
 }
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Kernel, 2015/06/17, modify for 8939/16 5.1 for orphan task
+static void orphan_foreground_task_kill(struct task_struct *task, short adj, short min_score_adj)
+{
+		if (min_score_adj == 0)
+		return;
+
+		if (task->parent->pid == 1 && adj == 0) {
+		lowmem_print(1, "kill orphan foreground task %s, pid %d, adj %hd, min_score_adj %hd\n",
+			task->comm, task->pid, adj, min_score_adj);
+		send_sig(SIGKILL, task, 0);
+		}
+}
+#endif /* VENDOR_EDIT */
 static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 {
 	struct task_struct *tsk;
@@ -467,9 +495,31 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		if (!p)
 			continue;
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Stability.Memory, 2016/01/06, add for D status process issue
+		if (p->state & TASK_UNINTERRUPTIBLE) {
+			task_unlock(p);
+			continue;
+		}
+		//resolve kill coredump process, it may continue long time
+		if (p->signal != NULL && (p->signal->flags & SIGNAL_GROUP_COREDUMP) ){
+			task_unlock(p);
+			continue;
+		}
+#endif /* VENDOR_EDIT */
+
 		oom_score_adj = p->signal->oom_score_adj;
 		if (oom_score_adj < min_score_adj) {
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Kernel, 2015/06/17, modify for 8939/16 5.1 for orphan task
+			tasksize = get_mm_rss(p->mm);
+#endif /* VENDOR_EIDT */
 			task_unlock(p);
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swap.Android.Kernel, 2015/06/17, modify for 8939/16 5.1 for orphan task
+			if (tasksize > 0)
+				orphan_foreground_task_kill(p, oom_score_adj, min_score_adj);
+#endif /* VENDOR_EIDT */
 			continue;
 		}
 		tasksize = get_mm_rss(p->mm);
@@ -526,6 +576,25 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			dump_tasks(NULL, NULL);
 		}
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Performance.Memory, 2016/05/31, add for lowmemorykiller uevent
+		if (selected_oom_score_adj == 0) {
+			lowmem_print(1, "Killing %s, adj is %hd, so send uevent to userspace\n",
+					selected->comm, selected_oom_score_adj);
+			schedule_work(&lowmemorykiller_work);
+		} else {
+			for (i = 1; i < 4; i++) {
+				if (selected_oom_score_adj <= lowmem_adj[i]) {
+					uevent_threshold[i]++;
+					if (uevent_threshold[i] == i * 5) {
+						lowmemorykiller_uevent(selected_oom_score_adj, i);
+					}
+					break;
+				}
+			}
+		}
+#endif /* VENDOR_EDIT */
+
 		lowmem_deathpending_timeout = jiffies + HZ;
 		set_tsk_thread_flag(selected, TIF_MEMDIE);
 		send_sig(SIGKILL, selected, 0);
@@ -546,6 +615,20 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	return rem;
 }
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Performance.Memory, 2016/05/31, add for lowmemorykiller uevent
+void lowmemorykiller_work_func(struct work_struct *work)
+{
+	kobject_uevent_env(lmk_module_kobj, KOBJ_CHANGE, lmklowmem);
+	lowmem_print(1, "lowmemorykiller send uevent: %s\n", lmklowmem[0]);
+}
+static void lowmemorykiller_uevent(short adj, int index)
+{
+	lowmem_print(1, "kill adj %hd more than %d times and so send uevent to userspace\n", adj, index * 5);
+	schedule_work(&lowmemorykiller_work);
+}
+#endif /* VENDOR_EDIT */
+
 static struct shrinker lowmem_shrinker = {
 	.scan_objects = lowmem_scan,
 	.count_objects = lowmem_count,
@@ -556,6 +639,12 @@ static int __init lowmem_init(void)
 {
 	register_shrinker(&lowmem_shrinker);
 	vmpressure_notifier_register(&lmk_vmpr_nb);
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.Performance.Memory, 2016/05/31, add for lowmemorykiller uevent
+	lmk_module_kobj = kset_find_obj(module_kset, KBUILD_MODNAME);
+	lowmem_print(1, "kernel obj name %s\n", lmk_module_kobj->name);
+	INIT_WORK(&lowmemorykiller_work, lowmemorykiller_work_func);
+#endif /* VENDOR_EDIT */
 	return 0;
 }
 

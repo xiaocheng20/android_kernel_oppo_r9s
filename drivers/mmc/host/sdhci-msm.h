@@ -153,6 +153,9 @@ struct sdhci_msm_pltfm_data {
 	u32 ice_clk_min;
 	struct sdhci_msm_pm_qos_data pm_qos_data;
 	bool core_3_0v_support;
+#ifdef VENDOR_EDIT //Jianfeng.Qiu@BSP.Driver, 2014-09-13, Add for sdcard vdd supply use ap gpio to enable
+    int sd_vdd_en;
+#endif /* VENDOR_EDIT */
 };
 
 struct sdhci_msm_bus_vote {

@@ -480,7 +480,10 @@ struct mdss_data_type {
 	atomic_t active_intf_cnt;
 	bool has_rot_dwnscale;
 	bool regulator_notif_register;
-
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    bool scm_set_allowable;
+    #endif
 	u64 ab[MDSS_MAX_BUS_CLIENTS];
 	u64 ib[MDSS_MAX_BUS_CLIENTS];
 	struct mdss_pp_block_off pp_block_off;

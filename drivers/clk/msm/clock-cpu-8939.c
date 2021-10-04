@@ -31,6 +31,9 @@
 #include <linux/pm_opp.h>
 #include <soc/qcom/clock-local2.h>
 #include <soc/qcom/pm.h>
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+#include <trace/events/power.h>
+//#endif
 
 #include "clock.h"
 #include <dt-bindings/clock/msm-cpu-clocks-8939.h>
@@ -133,6 +136,13 @@ static long cpu_clk_8939_round_rate(struct clk *c, unsigned long rate)
 	return clk_round_rate(c->parent, rate);
 }
 
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+struct cpu_clk_8939 *ptr_a53_bc_clk;
+struct cpu_clk_8939 *ptr_a53_lc_clk;
+struct cpu_clk_8939 *ptr_cci_clk;
+unsigned int cpu_rate_switch_count = 0;
+//#endif
+
 static int cpu_clk_8939_set_rate(struct clk *c, unsigned long rate)
 {
 	int ret = 0;
@@ -150,7 +160,27 @@ static int cpu_clk_8939_set_rate(struct clk *c, unsigned long rate)
 				NULL, 1);
 	}
 
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	cpu_rate_switch_count++;
+
+        if (!strcmp(c->dbg_name, "a53_bc_clk")) {
+		trace_clock_cpu_set_rate(cpu_rate_switch_count, "bc", ptr_a53_bc_clk->c.rate, rate, "lc", ptr_a53_lc_clk->c.rate, "cci", ptr_cci_clk->c.rate);
+	}
+
+	if (!strcmp(c->dbg_name, "a53_lc_clk")) {
+		trace_clock_cpu_set_rate(cpu_rate_switch_count, "lc", ptr_a53_lc_clk->c.rate, rate, "bc", ptr_a53_bc_clk->c.rate, "cci", ptr_cci_clk->c.rate);
+        }
+
+        if (!strcmp(c->dbg_name, "cci_clk")) {
+		trace_clock_cpu_set_rate(cpu_rate_switch_count, "cci", 	ptr_cci_clk->c.rate, rate, "bc", ptr_a53_bc_clk->c.rate, "lc", ptr_a53_lc_clk->c.rate);
+        }
+//#endif
+
 	ret = clk_set_rate(c->parent, rate);
+
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	trace_clock_cpu_log_return_code(cpu_rate_switch_count, "cpu_clk_8939_set_rate", (unsigned int)ret);
+//#endif
 
 	if (hw_low_power_ctrl)
 		pm_qos_remove_request(&cpuclk->req);
@@ -839,6 +869,11 @@ static int clock_a53_probe(struct platform_device *pdev)
 
 	atomic_notifier_chain_register(&panic_notifier_list,
 						&clock_panic_notifier);
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	ptr_a53_bc_clk = &a53_bc_clk;
+	ptr_a53_lc_clk = &a53_lc_clk;
+	ptr_cci_clk = &cci_clk;
+//#endif
 
 	return 0;
 }

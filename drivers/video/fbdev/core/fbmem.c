@@ -42,6 +42,12 @@
 
 #define FBPIXMAPSIZE	(1024 * 8)
 
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+volatile unsigned int lcd_on = 0;    
+volatile unsigned int lcd_off_status = 0; 
+#endif /*VENDOR_EDIT*/
+
 static DEFINE_MUTEX(registration_lock);
 
 struct fb_info *registered_fb[FB_MAX] __read_mostly;
@@ -50,7 +56,12 @@ EXPORT_SYMBOL(registered_fb);
 int num_registered_fb __read_mostly;
 EXPORT_SYMBOL(num_registered_fb);
 
+#ifndef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, export some symbol
 static struct fb_info *get_fb_info(unsigned int idx)
+#else /* VENDOR_EDIT */
+struct fb_info *get_fb_info(unsigned int idx)
+#endif /* VENDOR_EDIT */
 {
 	struct fb_info *fb_info;
 
@@ -65,6 +76,10 @@ static struct fb_info *get_fb_info(unsigned int idx)
 
 	return fb_info;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, export some symbol
+EXPORT_SYMBOL(get_fb_info);
+#endif /* VENDOR_EDIT */
 
 static void put_fb_info(struct fb_info *fb_info)
 {
@@ -1205,9 +1220,29 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			console_unlock();
 			return -ENODEV;
 		}
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+		if(arg==0)
+			lcd_on = 0 ;
+		if(arg==4)
+			lcd_off_status = 0 ;
+#endif /*VENDOR_EDIT*/
+
 		info->flags |= FBINFO_MISC_USEREVENT;
 		ret = fb_blank(info, arg);
 		info->flags &= ~FBINFO_MISC_USEREVENT;
+		
+#ifdef VENDOR_EDIT
+//ziqing.guo@BasicDrv.Sensor,2016/02/23, modify for speed up the process of fingerprint deblocking
+		if(arg==0)
+			{
+				lcd_off_status = 0 ;
+				lcd_on = 0 ;
+			}
+		if(arg==4)
+			lcd_off_status = 1 ;
+#endif /*VENDOR_EDIT*/
+
 		unlock_fb_info(info);
 		console_unlock();
 		break;

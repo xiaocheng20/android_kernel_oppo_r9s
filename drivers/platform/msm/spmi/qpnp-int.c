@@ -36,6 +36,14 @@
 /* This value is guaranteed not to be valid for private data */
 #define QPNPINT_INVALID_DATA	0x80000000
 
+#ifdef VENDOR_EDIT
+//Wenxian.zhen@Prd.BaseDrv, 2016/07/19, add for analysis power consumption
+#define WAKEUP_SOURCE_RTC	777
+#define WAKEUP_SOURCE_KPDPWR	64
+u64	wakeup_source_count_rtc;
+u64 wakeup_source_count_kpdpwr;
+#endif //VENDOR_EDIT 
+
 enum qpnpint_regs {
 	QPNPINT_REG_RT_STS		= 0x10,
 	QPNPINT_REG_SET_TYPE		= 0x11,
@@ -641,6 +649,14 @@ static int __qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 
 		pr_warn("%d triggered [0x%01x, 0x%02x,0x%01x] %s\n",
 				irq, spec->slave, spec->per, spec->irq, name);
+		#ifdef VENDOR_EDIT
+		//Wenxian.zhen@Prd.BaseDrv, 2016/07/19, add for analysis power consumption
+		if (WAKEUP_SOURCE_RTC == hwirq)
+			wakeup_source_count_rtc++;
+		if (WAKEUP_SOURCE_KPDPWR == hwirq)
+			wakeup_source_count_kpdpwr++;
+		#endif //VENDOR_EDIT 
+			
 	} else {
 		generic_handle_irq(irq);
 	}
@@ -667,6 +683,11 @@ int __init qpnpint_of_init(struct device_node *node, struct device_node *parent)
 {
 	struct q_chip_data *chip_d;
 
+	#ifdef VENDOR_EDIT
+	//Wenxian.zhen@Prd.BaseDrv, 2016/07/19, add for analysis power consumption
+	wakeup_source_count_rtc = 0;
+	wakeup_source_count_kpdpwr = 0;
+	#endif //VENDOR_EDIT 
 	chip_d = kzalloc(sizeof(struct q_chip_data), GFP_KERNEL);
 	if (!chip_d)
 		return -ENOMEM;

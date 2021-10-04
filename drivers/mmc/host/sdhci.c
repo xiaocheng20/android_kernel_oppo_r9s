@@ -1161,6 +1161,16 @@ void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 	unsigned long timeout;
 
 	WARN_ON(host->cmd);
+#ifdef VENDOR_EDIT
+//yh@bsp, 2015-10-21 Add for special card compatible
+        if(host->mmc->card_stuck_in_programing_status && ((cmd->opcode == MMC_WRITE_MULTIPLE_BLOCK) || (cmd->opcode == MMC_WRITE_BLOCK)))
+        {
+                pr_info("blocked write cmd:%s\n", mmc_hostname(host->mmc));
+                cmd->error = -EIO;
+                tasklet_schedule(&host->finish_tasklet);
+                return;
+        }
+#endif /* VENDOR_EDIT */
 
 	/* Wait max 10 ms */
 	timeout = 10000;
@@ -1615,6 +1625,20 @@ static bool sdhci_check_state(struct sdhci_host *host)
 	else
 		return false;
 }
+
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2016-08-10 Add emmc scaling control api
+bool sdhci_check_pwr(struct mmc_host *mmc)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+	if (!host->pwr) {
+		pr_err("sdhci pwr is 0! clk is %d\n", host->clock);
+		return true;
+	} else
+		return false;
+}
+EXPORT_SYMBOL(sdhci_check_pwr);
+#endif
 
 static bool sdhci_check_auto_tuning(struct sdhci_host *host,
 				  struct mmc_command *cmd)
@@ -2848,6 +2872,8 @@ static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask, u32 *mask)
 		    (command != MMC_SEND_STATUS))
 				host->flags |= SDHCI_NEEDS_RETUNING;
 
+	#ifdef VENDOR_EDIT
+	//yixue.ge@bsp.drv 20160830 add for qcom patch fix command response CRC error handling and INDEX/END bit error handling
 		/*
 		 * If this command initiates a data phase and a response
 		 * CRC error is signalled, the card can start transferring
@@ -2867,6 +2893,7 @@ static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask, u32 *mask)
 			host->cmd = NULL;
 			return;
 		}
+	#endif /*VENDOR_EDIT*/
 		tasklet_schedule(&host->finish_tasklet);
 		return;
 	}

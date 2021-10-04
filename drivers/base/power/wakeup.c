@@ -16,6 +16,10 @@
 #include <linux/debugfs.h>
 #include <linux/types.h>
 #include <trace/events/power.h>
+#ifdef VENDOR_EDIT
+//Yinqi.Xiong@Swdp.Android.OppoDebug, 2016/06/21, Add for Sync App and Kernel time
+#include <linux/rtc.h>
+#endif /* VENDOR_EDIT */
 
 #include "power.h"
 
@@ -28,6 +32,20 @@ bool events_check_enabled __read_mostly;
 /* If set and the system is suspending, terminate the suspend. */
 static bool pm_abort_suspend __read_mostly;
 
+#ifdef VENDOR_EDIT
+//Yongyao.Song#Prd.Network.Data, 2016/05/12, add for modem wake up source
+#define MODEM_WAKEUP_SRC_NUM 3
+int modem_wakeup_src_count[MODEM_WAKEUP_SRC_NUM] = { 0 };
+char modem_wakeup_src_string[MODEM_WAKEUP_SRC_NUM][10] =
+		{"DIAG_WS",
+		"IPA_WS",
+		"QMI_WS"};
+#endif /* VENDOR_EDIT */
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@@Swdp.Performance.Power, 2016/05/12, add for modem wake up source
+struct work_struct wakeup_reason_work;
+u16 modem_wakeup_source = 0;
+#endif /* VENDOR_EDIT */
 /*
  * Combined counters of registered wakeup events and wakeup events in progress.
  * They need to be modified together atomically, so it's better to use one
@@ -734,12 +752,33 @@ void pm_print_active_wakeup_sources(void)
 	struct wakeup_source *ws;
 	int active = 0;
 	struct wakeup_source *last_activity_ws = NULL;
+	#ifdef VENDOR_EDIT
+	//Yongyao.Song#Prd.Network.Data, 2016/05/12, add for modem wake up source
+	int i = 0;
+	#endif
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
 		if (ws->active) {
 			pr_info("active wakeup source: %s\n", ws->name);
 			active = 1;
+            #ifdef VENDOR_EDIT
+            //Yongyao.Song#Prd.Network.Data, 2016/05/12, add for modem wake up source
+			for(i = 0; i < MODEM_WAKEUP_SRC_NUM - 1; i++)
+            {
+                if (strcmp(modem_wakeup_src_string[i], ws->name) == 0)
+                {
+                    modem_wakeup_src_count[i]++;
+                    #ifdef VENDOR_EDIT
+                    //Yinqi.Xiong@Swdp.Performance.Power, 2016/08/05, add for modem wake up source
+                    if (i==1) {
+                        modem_wakeup_source = i;
+                        schedule_work(&wakeup_reason_work);
+                    }
+                    #endif /* VENDOR_EDIT */
+                }
+            }
+            #endif
 		} else if (!active &&
 			   (!last_activity_ws ||
 			    ktime_to_ns(ws->last_time) >
@@ -749,8 +788,20 @@ void pm_print_active_wakeup_sources(void)
 	}
 
 	if (!active && last_activity_ws)
+	{
 		pr_info("last active wakeup source: %s\n",
 			last_activity_ws->name);
+        #ifdef VENDOR_EDIT
+        //Yongyao.Song#Prd.Network.Data, 2016/05/12, add for modem wake up source
+        for(i = 0; i < MODEM_WAKEUP_SRC_NUM - 1; i++)
+        {
+            if (strcmp(modem_wakeup_src_string[i], last_activity_ws->name) == 0)
+            {
+                modem_wakeup_src_count[i]++;
+            }
+        }
+        #endif
+    }
 	rcu_read_unlock();
 }
 EXPORT_SYMBOL_GPL(pm_print_active_wakeup_sources);
@@ -778,7 +829,11 @@ bool pm_wakeup_pending(void)
 	}
 	spin_unlock_irqrestore(&events_lock, flags);
 
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for maybe pm_abort_suspend happend here
 	if (ret) {
+#else
+	if (ret || pm_abort_suspend) {
+#endif
 		pr_info("PM: Wakeup pending, aborting suspend\n");
 		pm_print_active_wakeup_sources();
 	}
@@ -964,18 +1019,75 @@ static int wakeup_sources_stats_open(struct inode *inode, struct file *file)
 	return single_open(file, wakeup_sources_stats_show, NULL);
 }
 
+#ifdef VENDOR_EDIT
+//Yanzhen.Feng@Swdp.Android.OppoDebug, 2015/08/14, Add for Sync App and Kernel time
+static ssize_t watchdog_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+	s32 value;
+	struct timespec ts;
+	struct rtc_time tm;
+
+	if (count == sizeof(s32)) {
+		if (copy_from_user(&value, buf, sizeof(s32)))
+			return -EFAULT;
+	} else if (count <= 11) { /* ASCII perhaps? */
+		char ascii_value[11];
+		unsigned long int ulval;
+		int ret;
+
+		if (copy_from_user(ascii_value, buf, count))
+			return -EFAULT;
+
+		if (count > 10) {
+			if (ascii_value[10] == '\n')
+				ascii_value[10] = '\0';
+			else
+				return -EINVAL;
+		} else {
+			ascii_value[count] = '\0';
+		}
+		ret = kstrtoul(ascii_value, 16, &ulval);
+		if (ret) {
+			pr_debug("%s, 0x%lx, 0x%x\n", ascii_value, ulval, ret);
+			return -EINVAL;
+		}
+		value = (s32)lower_32_bits(ulval);
+	} else {
+		return -EINVAL;
+	}
+
+	getnstimeofday(&ts);
+	rtc_time_to_tm(ts.tv_sec, &tm);
+	pr_warn("!@WatchDog_%d; %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
+		value, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
+
+	return count;
+}
+#endif /* VENDOR_EDIT */
+
 static const struct file_operations wakeup_sources_stats_fops = {
 	.owner = THIS_MODULE,
 	.open = wakeup_sources_stats_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = single_release,
+#ifdef VENDOR_EDIT
+//Yinqi.Xiong@Swdp.Android.OppoDebug, 2016/06/21, Add for Sync App and Kernel time
+	.write          = watchdog_write,
+#endif /* VENDOR_EDIT */
 };
 
 static int __init wakeup_sources_debugfs_init(void)
 {
+#ifndef VENDOR_EDIT
+//Yinqi.Xiong@Swdp.Android.OppoDebug, 2016/06/21,  Modify for Sync App and Kernel time
 	wakeup_sources_stats_dentry = debugfs_create_file("wakeup_sources",
 			S_IRUGO, NULL, NULL, &wakeup_sources_stats_fops);
+#else /* VENDOR_EDIT */
+	wakeup_sources_stats_dentry = debugfs_create_file("wakeup_sources",
+			S_IRUGO| S_IWUGO, NULL, NULL, &wakeup_sources_stats_fops);
+#endif /* VENDOR_EDIT */
 	return 0;
 }
 

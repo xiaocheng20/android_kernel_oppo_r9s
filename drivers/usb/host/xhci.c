@@ -115,6 +115,8 @@ int xhci_halt(struct xhci_hcd *xhci)
 			STS_HALT, STS_HALT, XHCI_MAX_HALT_USEC);
 	if (!ret) {
 		xhci->xhc_state |= XHCI_STATE_HALTED;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/26 modify for chg_type detect error, QCOM patch,case id: 02547193
 		xhci->cmd_ring_state = CMD_RING_STATE_STOPPED;
 
 		if (timer_pending(&xhci->cmd_timer)) {
@@ -123,9 +125,21 @@ int xhci_halt(struct xhci_hcd *xhci)
 			del_timer(&xhci->cmd_timer);
 			xhci_cleanup_command_queue(xhci);
 		}
+#endif /* VENDOR_EDIT */
 	} else
 		xhci_warn(xhci, "Host not halted after %u microseconds.\n",
 				XHCI_MAX_HALT_USEC);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/26 modify for chg_type detect error, QCOM patch,case id: 02547193
+	xhci->cmd_ring_state = CMD_RING_STATE_STOPPED; 
+	if (timer_pending(&xhci->cmd_timer)) { 
+		xhci_dbg_trace(xhci, trace_xhci_dbg_init, 
+				"Cleanup command queue"); 
+		del_timer(&xhci->cmd_timer); 
+		xhci_cleanup_command_queue(xhci); 
+	} 
+#endif /* VENDOR_EDIT */
+
 	return ret;
 }
 

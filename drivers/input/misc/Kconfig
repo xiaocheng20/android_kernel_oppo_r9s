@@ -755,5 +755,20 @@ config INPUT_DRV2667_HAPTICS
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called drv260x-haptics.
+	  
+#ifdef VENDOR_EDIT	
+#Ziqing.Guo@Prd.BasicDrv, 2016-06-08 Add for fingerprint driver	
+config BTP_FPC1140
+       default n	
+       tristate "FPC_BTP fingerprint sensor support"	
+       depends on SPI_MASTER	
+#endif /* VENDOR_EDIT */	
 
+#ifdef VENDOR_EDIT
+#Ping.Liu@BSP.Fingerprint.Basic, 2017/01/01, 
+#add for goodixfp.
+config BTP_GDX
+       default n	
+       tristate "GDX_BTP fingerprint sensor support"		
+#endif /* VENDOR_EDIT */	
 endif

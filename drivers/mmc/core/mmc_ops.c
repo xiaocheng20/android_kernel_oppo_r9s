@@ -57,6 +57,35 @@ int mmc_send_status(struct mmc_card *card, u32 *status)
 	return __mmc_send_status(card, status, false);
 }
 
+#ifdef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/12/06 for cmd6 and cmd13 timeout 
+static int mmc_switch_status_error(struct mmc_host *host, u32 status)
+{
+	if (mmc_host_is_spi(host)) {
+		if (status & R1_SPI_ILLEGAL_COMMAND)
+			return -EBADMSG;
+	} else {
+		if (status & 0xFDFFA000)
+			pr_warn("%s: unexpected status %#x after switch\n",
+				mmc_hostname(host), status);
+		if (status & R1_SWITCH_ERROR)
+			return -EBADMSG;
+	}
+	return 0;
+}
+
+int mmc_switch_status(struct mmc_card *card)
+{
+	u32 status;
+	int err;
+
+	err = mmc_send_status(card, &status);
+	if (err)
+		return err;
+
+	return mmc_switch_status_error(card->host, status);
+}
+#endif /*VENDOR_EDIT*/
+
 static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 {
 	int err;
@@ -564,6 +593,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		}
 	} while (R1_CURRENT_STATE(status) == R1_STATE_PRG);
 
+#ifndef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/12/06 for cmd6 and cmd13 timeout 
 	if (mmc_host_is_spi(host)) {
 		if (status & R1_SPI_ILLEGAL_COMMAND)
 			return -EBADMSG;
@@ -574,8 +604,13 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		if (status & R1_SWITCH_ERROR)
 			return -EBADMSG;
 	}
-
+	
 	return 0;
+#else/*VENDOR_EDIT*/
+	err = mmc_switch_status_error(host, status);
+	return err;
+#endif/*VENDOR_EDIT*/		
+	
 }
 EXPORT_SYMBOL_GPL(__mmc_switch);
 

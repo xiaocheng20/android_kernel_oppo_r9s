@@ -2797,6 +2797,10 @@ static int dsi_event_thread(void *data)
 			mdss_dsi_pll_relock(ctrl);
 
 		if (todo & DSI_EV_DLNx_FIFO_UNDERFLOW) {
+#ifdef VENDOR_EDIT
+/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/03/11  Add for debug reboot surfaceflinger die */
+            pr_err("%s: DSI_EV_MDP_FIFO_UNDERFLOW",__func__);
+#endif /*VENDOR_EDIT*/
 			mutex_lock(&ctrl->mutex);
 			if (ctrl->recovery) {
 				pr_debug("%s: Handling underflow event\n",

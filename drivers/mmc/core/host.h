@@ -14,6 +14,12 @@
 
 int mmc_register_host_class(void);
 void mmc_unregister_host_class(void);
+#ifdef VENDOR_EDIT
+#ifdef CONFIG_MMC_SDHCI
+//jie.cheng@swdp.shanghai, 2016-08-19 Add emmc scaling control api
+extern bool sdhci_check_pwr(struct mmc_host *mmc);
+#endif
+#endif
 
 #endif
 

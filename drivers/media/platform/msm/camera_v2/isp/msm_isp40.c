@@ -736,6 +736,11 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 	uint32_t first_start, uint32_t blocking_call)
 {
 	long rc = 0;
+#ifdef VENDOR_EDIT
+/*modified by Zhengrong.Zhang@Camera 20161009 for [debug isp reset timeout]*/
+	uint32_t irq_status0;
+	long time;
+#endif
 	init_completion(&vfe_dev->reset_complete);
 
 	if (first_start) {
@@ -751,8 +756,24 @@ static long msm_vfe40_reset_hardware(struct vfe_device *vfe_dev,
 
 
 	if (blocking_call) {
+#ifndef VENDOR_EDIT
+/*modified by Zhengrong.Zhang@Camera 20161009 for [debug isp reset timeout]*/
 		rc = wait_for_completion_timeout(
 			&vfe_dev->reset_complete, msecs_to_jiffies(50));
+#else
+		time = wait_for_completion_interruptible_timeout(
+			&vfe_dev->reset_complete, msecs_to_jiffies(500));
+		if (time <= 0) {
+			irq_status0 = msm_camera_io_r(vfe_dev->vfe_base + 0x38);
+			pr_err("%s: IRQ Status 0x%x\n", __func__, irq_status0);
+			if (irq_status0 & (1 << 31))
+				rc = 1;
+			else
+				rc = time;
+		} else {
+			rc = 1;
+		}
+#endif
 	}
 	return rc;
 }

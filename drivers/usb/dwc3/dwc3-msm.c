@@ -52,6 +52,21 @@
 #include "debug.h"
 #include "xhci.h"
 
+//#define USB_DEBUG	//Fuchun.Liao@Mobile.BSP.CHG 2016/07/20 add for chg_type detect error
+
+#ifdef USB_DEBUG
+#undef dev_dbg
+#define dev_dbg(dev, format, arg...)		\
+	dev_printk(KERN_ERR, dev, format, ##arg)
+
+#undef dev_info
+#define dev_info(dev, format, arg...)		\
+	dev_printk(KERN_ERR, dev, format, ##arg)
+
+#undef pr_debug
+#define pr_debug(fmt, ...) printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 #define DWC3_IDEV_CHG_MAX 1500
 #define DWC3_HVDCP_CHG_MAX 1800
 
@@ -228,6 +243,11 @@ struct dwc3_msm {
 	bool			suspend;
 	bool			disable_host_mode_pm;
 	enum dwc3_id_state	id_state;
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add otg_switch 2016/07/25
+	bool			otg_switch;
+	bool			otg_online;
+#endif /*VENDOR_EDIT*/
 	unsigned long		lpm_flags;
 #define MDWC3_SS_PHY_SUSPEND		BIT(0)
 #define MDWC3_ASYNC_IRQ_WAKE_CAPABILITY	BIT(1)
@@ -258,6 +278,17 @@ struct dwc3_msm {
 
 #define DSTS_CONNECTSPD_SS		0x4
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/08/25 add for charger critical log
+static int primal_chg_type = 0;
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+// wenbin.liu@BSP.CHG.Basic, 2017/04/13
+// Add for add otg id change support
+extern void otg_enable_id_value(void);
+extern void otg_disable_id_value(void);
+#endif /*VENDOR_EDIT*/
 
 static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
 static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA);
@@ -359,6 +390,18 @@ static inline void dwc3_msm_write_readback(void *base, u32 offset,
 			__func__, val, offset);
 }
 
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
+static inline int oppo_test_id(struct dwc3_msm *mdwc)
+{
+	if(mdwc->otg_switch == false){
+		return 1;
+	}
+	else{
+		return test_bit(ID, &mdwc->inputs);
+	}
+}
+#endif /*VENDOR_EDIT*/
 static bool dwc3_msm_is_host_superspeed(struct dwc3_msm *mdwc)
 {
 	int i, num_ports;
@@ -1512,7 +1555,9 @@ static void dwc3_restart_usb_work(struct work_struct *w)
 
 	/* guard against concurrent VBUS handling */
 	mdwc->in_restart = true;
-
+#ifdef USB_DEBUG
+	pr_err("%s vbus_active:%d\n", __func__, mdwc->vbus_active);
+#endif
 	if (!mdwc->vbus_active) {
 		dev_dbg(mdwc->dev, "%s bailing out in disconnect\n", __func__);
 		dwc->err_evt_seen = false;
@@ -1784,6 +1829,9 @@ static void dwc3_msm_notify_event(struct dwc3 *dwc, unsigned event,
 					PWR_EVNT_LPM_OUT_L1_MASK, 1);
 
 		atomic_set(&dwc->in_lpm, 0);
+#ifdef USB_DEBUG
+		pr_err("%s conndone_event set in_lpm 0\n", __func__);
+#endif
 		break;
 	case DWC3_CONTROLLER_NOTIFY_OTG_EVENT:
 		dev_dbg(mdwc->dev, "DWC3_CONTROLLER_NOTIFY_OTG_EVENT received\n");
@@ -1965,7 +2013,10 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 				__func__, evt->count / 4);
 				dbg_print_reg("PENDING DEVICE EVENT",
 						*(u32 *)(evt->buf + evt->lpos));
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/17 modify for usb wakelock, QCM patch, case02581735
 				return -EBUSY;
+#endif /* VENDOR_EDIT */
 			}
 		}
 	}
@@ -2001,8 +2052,15 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 	}
 
 	ret = dwc3_msm_prepare_suspend(mdwc);
+#ifndef USB_DEBUG
 	if (ret)
 		return ret;
+#else
+	if (ret) {
+		pr_err("%s prepare_suspend fail\n", __func__);
+		return ret;
+	}
+#endif
 
 	/* Initialize variables here */
 	can_suspend_ssphy = !(mdwc->in_host_mode &&
@@ -2077,7 +2135,9 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 	}
 
 	atomic_set(&dwc->in_lpm, 1);
-
+#ifdef USB_DEBUG
+	pr_err("%s set in_lpm 1\n", __func__);
+#endif
 	/*
 	 * with DCP or during cable disconnect, we dont require wakeup
 	 * using HS_PHY_IRQ or SS_PHY_IRQ. Hence enable wakeup only in
@@ -2091,6 +2151,18 @@ static int dwc3_msm_suspend(struct dwc3_msm *mdwc)
 			enable_irq_wake(mdwc->ss_phy_irq);
 			enable_irq(mdwc->ss_phy_irq);
 		}
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/08 modify for chg_type error, case02574016, CR972212 	
+		/*
+		 * Enable power event irq during bus suspend in host mode for
+		 * mapping MPM pin for DP so that wakeup can happen in system
+		 * suspend.
+		 */
+		if (mdwc->in_host_mode) {
+			enable_irq(mdwc->pwr_event_irq);
+			enable_irq_wake(mdwc->pwr_event_irq);
+		}
+#endif /* VENDOR_EDIT */	
 		mdwc->lpm_flags |= MDWC3_ASYNC_IRQ_WAKE_CAPABILITY;
 	}
 
@@ -2171,9 +2243,15 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 	}
 
 	atomic_set(&dwc->in_lpm, 0);
+#ifdef USB_DEBUG
+	pr_err("%s set in_lpm 0\n", __func__);
+#endif
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/08 modify for chg_type error, case02574016, CR972212	
 	/* enable power evt irq for IN P3 detection */
 	enable_irq(mdwc->pwr_event_irq);
+#endif /* VENDOR_EDIT */
 
 	/* Disable HSPHY auto suspend */
 	dwc3_msm_write_reg(mdwc->base, DWC3_GUSB2PHYCFG(0),
@@ -2189,10 +2267,23 @@ static int dwc3_msm_resume(struct dwc3_msm *mdwc)
 			disable_irq_wake(mdwc->ss_phy_irq);
 			disable_irq_nosync(mdwc->ss_phy_irq);
 		}
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/08 modify for chg_type error, case02574016, CR972212	
+		if (mdwc->in_host_mode) {
+			disable_irq_wake(mdwc->pwr_event_irq);
+			disable_irq(mdwc->pwr_event_irq);
+		}
+#endif /* VENDOR_EDIT */
+
 		mdwc->lpm_flags &= ~MDWC3_ASYNC_IRQ_WAKE_CAPABILITY;
 	}
 
 	dev_info(mdwc->dev, "DWC3 exited from low power mode\n");
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/08 modify for chg_type error, case02574016, CR972212	
+	/* enable power evt irq for IN P3 detection */
+	enable_irq(mdwc->pwr_event_irq);
+#endif /* VENDOR_EDIT */
 
 	/* Enable core irq */
 	if (dwc->irq)
@@ -2251,8 +2342,17 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 		mdwc->init = true;
 		pm_runtime_set_autosuspend_delay(mdwc->dev, 1000);
 		pm_runtime_use_autosuspend(mdwc->dev);
+#ifndef USB_DEBUG
 		if (!work_busy(&mdwc->sm_work.work))
 			schedule_delayed_work(&mdwc->sm_work, 0);
+#else
+		if (!work_busy(&mdwc->sm_work.work)) {
+			schedule_delayed_work(&mdwc->sm_work, 0);
+			pr_err("%s work not busy\n", __func__);
+		} else {
+			pr_err("%s work busy\n", __func__);
+		}
+#endif
 		return;
 	}
 
@@ -2265,7 +2365,12 @@ static void dwc3_resume_work(struct work_struct *w)
 							resume_work.work);
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 
+#ifndef USB_DEBUG
 	dev_dbg(mdwc->dev, "%s: dwc3 resume work\n", __func__);
+#else
+	dev_dbg(mdwc->dev, "%s: dwc3 resume work, resume_pending:%d\n", 
+		__func__, mdwc->resume_pending);
+#endif
 
 	/*
 	 * exit LPM first to meet resume timeline from device side.
@@ -2281,6 +2386,9 @@ static void dwc3_resume_work(struct work_struct *w)
 
 	if (atomic_read(&mdwc->pm_suspended)) {
 		dbg_event(0xFF, "RWrk PMSus", 0);
+#ifdef USB_DEBUG
+		pr_err("%s pm_suspended\n", __func__);
+#endif
 		/* let pm resume kick in resume work later */
 		return;
 	}
@@ -2392,6 +2500,11 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 {
 	struct dwc3_msm *mdwc = container_of(psy, struct dwc3_msm,
 								usb_psy);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/16 add for usb issue debug
+	static unsigned int usb_online_pre = 0;
+#endif /* VENDOR_EDIT */
+
 	switch (psp) {
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		val->intval = mdwc->voltage_max;
@@ -2407,6 +2520,14 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = mdwc->online;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/16 add for usb issue debug
+		if(val->intval != usb_online_pre) {
+			dev_dbg(mdwc->dev, "usb get prop online:%d, online_pre:%d\n",
+				val->intval, usb_online_pre);
+		}
+		usb_online_pre = val->intval;
+#endif /* VENDOR_EDIT */
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		val->intval = psy->type;
@@ -2417,6 +2538,21 @@ static int dwc3_msm_power_get_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_USB_OTG:
 		val->intval = !mdwc->id_state;
 		break;
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
+		val->intval = mdwc->otg_switch;
+		break;
+	case POWER_SUPPLY_PROP_OTG_ONLINE:
+		val->intval = mdwc->otg_online;
+		break;
+#endif
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/08/25 add for charger critical log
+	case POWER_SUPPLY_PROP_PRIMAL_PROPERTY:
+		val->intval = primal_chg_type;
+		break;
+#endif /* VENDOR_EDIT */
 	default:
 		return -EINVAL;
 	}
@@ -2432,10 +2568,22 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	int ret;
 	enum dwc3_id_state id;
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
+	static bool otg_absent = true;
+#endif
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_USB_OTG:
 		id = val->intval ? DWC3_ID_GROUND : DWC3_ID_FLOAT;
+#ifdef USB_DEBUG
+		pr_err("%s usb_otg id:%d, id_state:%d, is_drd:%d, disable_host_mode:%d\n", 
+			__func__, id, mdwc->id_state, dwc->is_drd,disable_host_mode);
+#endif
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/20 add for otg_regulator not disabled after otg out
+		otg_absent = id;
+#endif /* VENDOR_EDIT */
 		if (mdwc->id_state == id)
 			break;
 
@@ -2444,14 +2592,49 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 						__func__, mdwc->id_state);
 			break;
 		}
-
+#ifndef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
 		/* Let OTG know about ID detection */
 		mdwc->id_state = id;
+#else		
+		/* Let OTG know about ID detection */
+		if(mdwc->otg_switch){
+			mdwc->id_state = id;
+		}
+		else{
+			mdwc->id_state = DWC3_ID_FLOAT;
+		}
+#endif
 		dbg_event(0xFF, "id_state", mdwc->id_state);
 		if (dwc->is_drd)
 			queue_delayed_work(mdwc->dwc3_wq,
 					&mdwc->resume_work, 0);
 		break;
+		
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add otg_switch 2016/07/25
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
+		mdwc->otg_switch = val->intval;
+		if(mdwc->otg_switch){
+			otg_enable_id_value();
+			if(!otg_absent){
+				mdwc->id_state = DWC3_ID_GROUND;
+				if (dwc->is_drd)
+						queue_delayed_work(mdwc->dwc3_wq,&mdwc->resume_work, 0);
+			}
+		}
+		else{
+			otg_disable_id_value();
+			mdwc->otg_online = false;
+			if(!mdwc->id_state){
+				mdwc->id_state = DWC3_ID_FLOAT;
+				if (dwc->is_drd)
+						queue_delayed_work(mdwc->dwc3_wq,&mdwc->resume_work, 0);
+			}
+		}
+		pr_err("[%s](otg_switch):otg_absent=%d,id_state=%d,otg_switch=%d,otg_online=%d,drd=%d\n",__func__,otg_absent,mdwc->id_state,mdwc->otg_switch,mdwc->otg_online,dwc->is_drd);
+		break;
+#endif /*VENDOR_EDIT*/
 	/* PMIC notification for DP_DM state */
 	case POWER_SUPPLY_PROP_DP_DM:
 		ret = usb_phy_change_dpdm(mdwc->hs_phy, val->intval);
@@ -2471,6 +2654,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		 * there is change in USB cable also if there is no USB cable
 		 * notification.
 		 */
+#ifdef USB_DEBUG
+		pr_err("%s otg_state:%d,vbus_active:%d\n", __func__,
+			mdwc->otg_state, mdwc->vbus_active);
+#endif
 		if (mdwc->otg_state == OTG_STATE_UNDEFINED) {
 			mdwc->vbus_active = val->intval;
 			dwc3_ext_event_notify(mdwc);
@@ -2481,6 +2668,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 			break;
 
 		mdwc->vbus_active = val->intval;
+#ifdef USB_DEBUG
+		pr_err("%s in_restart:%d, is_drd:%d\n", __func__, 
+			mdwc->in_restart, dwc->is_drd);
+#endif
 		if (dwc->is_drd && !mdwc->in_restart) {
 			/*
 			 * Set debouncing delay to 120ms. Otherwise battery
@@ -2493,6 +2684,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
 		mdwc->online = val->intval;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/16 add for usb issue debug
+		dev_dbg(mdwc->dev, "usb set prop online:%d\n", val->intval);
+#endif /* VENDOR_EDIT */
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		mdwc->voltage_max = val->intval;
@@ -2545,6 +2740,14 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_HEALTH:
 		mdwc->health_status = val->intval;
 		break;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/08/25 add for charger critical log
+	case POWER_SUPPLY_PROP_PRIMAL_PROPERTY:
+		primal_chg_type = val->intval;
+		dev_dbg(mdwc->dev, "%s: primal_chg_type:%d\n", 
+				__func__, primal_chg_type);
+		break;
+#endif /* VENDOR_EDIT */
 	default:
 		return -EINVAL;
 	}
@@ -2563,6 +2766,14 @@ dwc3_msm_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_TYPE:
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
+	case POWER_SUPPLY_PROP_OTG_SWITCH:
+#endif
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/08/25 add for charger critical log
+	case POWER_SUPPLY_PROP_PRIMAL_PROPERTY:
+#endif /* VENDOR_EDIT */
 		return 1;
 	default:
 		break;
@@ -2586,6 +2797,15 @@ static enum power_supply_property dwc3_msm_pm_power_props_usb[] = {
 	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_USB_OTG,
+#ifdef VENDOR_EDIT
+//PengNan@SW.BSP add for otg_switch 2016/07/25
+	POWER_SUPPLY_PROP_OTG_SWITCH,
+	POWER_SUPPLY_PROP_OTG_ONLINE,
+#endif
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/08/25 add for critical log
+	POWER_SUPPLY_PROP_PRIMAL_PROPERTY,
+#endif /* VENDOR_EDIT */
 };
 
 static irqreturn_t dwc3_pmic_id_irq(int irq, void *data)
@@ -3195,6 +3415,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 	if (!mdwc->vbus_reg) {
 		mdwc->vbus_reg = devm_regulator_get_optional(mdwc->dev,
 					"vbus_dwc3");
+		pr_err("%s:vbus_reg null\n",__func__);
 		if (IS_ERR(mdwc->vbus_reg) &&
 				PTR_ERR(mdwc->vbus_reg) == -EPROBE_DEFER) {
 			/* regulators may not be ready, so retry again later */
@@ -3212,8 +3433,14 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		mdwc->hs_phy->flags |= PHY_HOST_MODE;
 		mdwc->ss_phy->flags |= PHY_HOST_MODE;
 		usb_phy_notify_connect(mdwc->hs_phy, USB_SPEED_HIGH);
-		if (!IS_ERR(mdwc->vbus_reg))
+		if (!IS_ERR(mdwc->vbus_reg)){
 			ret = regulator_enable(mdwc->vbus_reg);
+	#ifdef VENDOR_EDIT
+	//PengNan@SW.BSP add for the otg_online for the framework 2016/07/25
+			mdwc->otg_online = true;
+			pr_err("%s:regulator_enable\n",__func__);
+	#endif
+		}
 		if (ret) {
 			dev_err(mdwc->dev, "unable to enable vbus_reg\n");
 			mdwc->hs_phy->flags &= ~PHY_HOST_MODE;
@@ -3273,6 +3500,12 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		usb_unregister_atomic_notify(&mdwc->usbdev_nb);
 		if (!IS_ERR(mdwc->vbus_reg))
 			ret = regulator_disable(mdwc->vbus_reg);
+		#ifdef VENDOR_EDIT
+		//PengNan@SW.BSP add for the otg_online for the framework 2016/07/25
+			mdwc->otg_online = false;
+			pr_err("%s:disable_regulator\n",__func__);
+		#endif
+		}
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable vbus_reg\n");
 			return ret;
@@ -3357,16 +3590,31 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA)
 {
 	enum power_supply_type power_supply_type;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for float charger detect
+	static int charger_type_pre = DWC3_INVALID_CHARGER;
+#endif /* VENDOR_EDIT */
 
 	if (mdwc->charging_disabled)
 		return 0;
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for float charger detect
 	if (mdwc->chg_type != DWC3_INVALID_CHARGER) {
 		dev_dbg(mdwc->dev,
 			"SKIP setting power supply type again,chg_type = %d\n",
 			mdwc->chg_type);
 		goto skip_psy_type;
 	}
+#else
+	if (mdwc->chg_type != DWC3_INVALID_CHARGER &&
+			charger_type_pre == mdwc->chg_type) {
+		dev_err(mdwc->dev,
+			"SKIP setting power supply type again,chg_type_pre = %d, chg_type:%d\n",
+			charger_type_pre, mdwc->chg_type);
+		goto skip_psy_type;
+	}
+#endif /* VENDOR_EDIT */
 
 	dev_dbg(mdwc->dev, "Requested curr from USB = %u, max-type-c:%u\n",
 					mA, mdwc->typec_current_max);
@@ -3381,6 +3629,10 @@ static int dwc3_msm_gadget_vbus_draw(struct dwc3_msm *mdwc, unsigned mA)
 	else
 		power_supply_type = POWER_SUPPLY_TYPE_UNKNOWN;
 
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for float charger detect
+	charger_type_pre = mdwc->chg_type;
+#endif /* VENDOR_EDIT */
 	power_supply_set_supply_type(&mdwc->usb_psy, power_supply_type);
 
 skip_psy_type:
@@ -3394,11 +3646,29 @@ skip_psy_type:
 	/* Override mA if type-c charger used (use hvdcp/bc1.2 if it is 500) */
 	if (mdwc->typec_current_max > 500 && mA < mdwc->typec_current_max)
 		mA = mdwc->typec_current_max;
-
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@BSP.CHG.Basic 2016/09/22 modify for bug856160 usb issue
 	if (mdwc->max_power == mA)
 		return 0;
+#else
+	if (mdwc->max_power == mA) {
+		if(mA == 0 && mdwc->chg_type == DWC3_INVALID_CHARGER) {
+			//do nothing
+			dev_err(mdwc->dev, "ma = %u, chg_type = %d, not return\n", 
+				mA, mdwc->chg_type);
+		} else {
+			return 0;
+		}
+	}
+#endif /* VENDOR_EDIT */
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/16 add for usb issue debug
 	dev_info(mdwc->dev, "Avail curr from USB = %u\n", mA);
+#else
+	dev_info(mdwc->dev, "Avail curr from USB = %u, max_power = %u, chg_type = %d\n", 
+		mA, mdwc->max_power, mdwc->chg_type);
+#endif /* VENDOR_EDIT */
 
 	if (mdwc->max_power <= 2 && mA > 2) {
 		/* Enable Charging */
@@ -3406,10 +3676,22 @@ skip_psy_type:
 			goto psy_error;
 		if (power_supply_set_current_limit(&mdwc->usb_psy, 1000*mA))
 			goto psy_error;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for set usb online 0/1 frequently
 	} else if (mdwc->max_power > 0 && (mA == 0 || mA == 2)) {
+#else
+	} else if (mdwc->max_power > 0 && (mA == 0 || mA == 2) && 
+				(mdwc->chg_type == DWC3_INVALID_CHARGER)) {
+#endif /* VENDOR_EDIT */
 		/* Disable charging */
 		if (power_supply_set_online(&mdwc->usb_psy, false))
 			goto psy_error;
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/16 add for bug856160 usb issue
+	} else if(mdwc->max_power == 0 && mA == 0 && mdwc->chg_type == DWC3_INVALID_CHARGER) {
+		if (power_supply_set_online(&mdwc->usb_psy, false))
+			goto psy_error;
+#endif /* VENDOR_EDIT */
 	} else {
 		/* Enable charging */
 		if (power_supply_set_online(&mdwc->usb_psy, true))
@@ -3434,11 +3716,17 @@ static void dwc3_check_float_lines(struct dwc3_msm *mdwc)
 	int dpdm;
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 
-	dev_dbg(mdwc->dev, "%s: Check linestate\n", __func__);
+	//dev_dbg(mdwc->dev, "%s: Check linestate\n", __func__);
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for float charger detect
 	dwc3_msm_gadget_vbus_draw(mdwc, 0);
-
+#endif /* VENDOR_EDIT */
 	/* Get linestate with Idp_src enabled */
 	dpdm = usb_phy_dpdm_with_idp_src(mdwc->hs_phy);
+	dev_err(mdwc->dev, "%s dpdm:%d\n", __func__, dpdm);
+
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/20 modify for float charger detect
 	if (dpdm == 0x2) {
 		/* DP is HIGH = lines are floating */
 		mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
@@ -3449,6 +3737,19 @@ static void dwc3_check_float_lines(struct dwc3_msm *mdwc)
 	} else if (dpdm) {
 		dev_dbg(mdwc->dev, "%s:invalid linestate:%x\n", __func__, dpdm);
 	}
+#else
+	if(dpdm == 0x0) {
+		/* DP is low, DM is low, USB_SDP */
+		/* do nothing */
+	} else {
+		mdwc->chg_type = DWC3_PROPRIETARY_CHARGER;
+		mdwc->otg_state = OTG_STATE_B_IDLE;
+		pm_runtime_put_sync(mdwc->dev);
+		dbg_event(0xFF, "FLT psync",
+				atomic_read(&mdwc->dev->power.usage_count));
+	}
+#endif /* VENDOR_EDIT */
+
 }
 
 static void dwc3_initialize(struct dwc3_msm *mdwc)
@@ -3522,15 +3823,27 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 	}
 
 	state = usb_otg_state_string(mdwc->otg_state);
+#ifndef USB_DEBUG
 	dev_dbg(mdwc->dev, "%s state\n", state);
+#else
+	dev_dbg(mdwc->dev, "%s state, otg_state:%d\n", state, mdwc->otg_state);
+#endif
 	dbg_event(0xFF, state, 0);
 
 	/* Check OTG state */
 	switch (mdwc->otg_state) {
 	case OTG_STATE_UNDEFINED:
+	#ifndef VENDOR_EDIT
+	//PengNan@SW.BSP add for otg_switch 2016/07/25
 		if (!test_bit(ID, &mdwc->inputs)) {
+	#else
+		if(!oppo_test_id(mdwc)) {
+	#endif
 			dbg_event(0xFF, "undef_host", 0);
 			atomic_set(&dwc->in_lpm, 0);
+#ifndef USB_DEBUG
+			pr_err("%s undefined set in_lpm 0\n", __func__);
+#endif
 			pm_runtime_set_active(mdwc->dev);
 			pm_runtime_enable(mdwc->dev);
 			pm_runtime_get_noresume(mdwc->dev);
@@ -3551,7 +3864,11 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		}
 
 		if (test_bit(B_SESS_VLD, &mdwc->inputs)) {
+#ifndef USB_DEBUG
 			dev_dbg(mdwc->dev, "b_sess_vld\n");
+#else
+			dev_dbg(mdwc->dev, "undefined b_sess_vld,chg_type:%d\n", mdwc->chg_type);
+#endif
 			dbg_event(0xFF, "undef_b_sess_vld", 0);
 			switch (mdwc->chg_type) {
 			case DWC3_DCP_CHARGER:
@@ -3590,6 +3907,9 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		if (!test_bit(B_SESS_VLD, &mdwc->inputs)) {
 			dbg_event(0xFF, "undef_!b_sess_vld", 0);
 			atomic_set(&dwc->in_lpm, 0);
+#ifdef USB_DEBUG
+			pr_err("%s b_sess_vld set in_lpm 0\n", __func__);
+#endif
 			pm_runtime_set_active(mdwc->dev);
 			pm_runtime_enable(mdwc->dev);
 			pm_runtime_get_noresume(mdwc->dev);
@@ -3602,13 +3922,22 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		break;
 
 	case OTG_STATE_B_IDLE:
+	#ifndef VENDOR_EDIT
+	//PengNan@SW.BSP add for otg_switch 2016/07/25
 		if (!test_bit(ID, &mdwc->inputs)) {
+	#else
+		if(!oppo_test_id(mdwc)) {
+	#endif
 			dev_dbg(mdwc->dev, "!id\n");
 			mdwc->otg_state = OTG_STATE_A_IDLE;
 			work = 1;
 			mdwc->chg_type = DWC3_INVALID_CHARGER;
 		} else if (test_bit(B_SESS_VLD, &mdwc->inputs)) {
+#ifndef USB_DEBUG
 			dev_dbg(mdwc->dev, "b_sess_vld\n");
+#else
+			dev_dbg(mdwc->dev, "b_idle b_sess_vld, chg_type:%d\n", mdwc->chg_type);
+#endif
 			switch (mdwc->chg_type) {
 			case DWC3_DCP_CHARGER:
 			case DWC3_PROPRIETARY_CHARGER:
@@ -3635,6 +3964,15 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				if (mdwc->detect_dpdm_floating &&
 				    mdwc->chg_type == DWC3_SDP_CHARGER) {
 					dwc3_check_float_lines(mdwc);
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/22 modify for float charger detection
+					if(mdwc->chg_type == DWC3_DCP_CHARGER
+						|| mdwc->chg_type == DWC3_PROPRIETARY_CHARGER) {
+						dev_dbg(mdwc->dev, "lpm, DCP/PROP CHARGER\n");
+						dwc3_msm_gadget_vbus_draw(mdwc,
+							dcp_max_current);
+					}
+#endif /* VENDOR_EDIT */
 					if (mdwc->chg_type != DWC3_SDP_CHARGER)
 						break;
 				}
@@ -3654,8 +3992,14 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		break;
 
 	case OTG_STATE_B_PERIPHERAL:
+	#ifndef VENDOR_EDIT
+	//PengNan@SW.BSP add for otg_switch 2016/07/25
 		if (!test_bit(B_SESS_VLD, &mdwc->inputs) ||
 				!test_bit(ID, &mdwc->inputs)) {
+	#else
+		if(!test_bit(B_SESS_VLD, &mdwc->inputs) || 
+				!oppo_test_id(mdwc)) {
+	#endif
 			dev_dbg(mdwc->dev, "!id || !bsv\n");
 			mdwc->otg_state = OTG_STATE_B_IDLE;
 			dwc3_otg_start_peripheral(mdwc, 0);
@@ -3709,7 +4053,12 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 	case OTG_STATE_A_IDLE:
 		/* Switch to A-Device*/
+	#ifndef VENDOR_EDIT
+	//PengNan@SW.BSP add for otg_switch 2016/07/25
 		if (test_bit(ID, &mdwc->inputs)) {
+	#else
+		if(oppo_test_id(mdwc)) {
+	#endif
 			dev_dbg(mdwc->dev, "id\n");
 			mdwc->otg_state = OTG_STATE_B_IDLE;
 			mdwc->vbus_retry_count = 0;
@@ -3756,7 +4105,9 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		dev_err(mdwc->dev, "%s: invalid otg-state\n", __func__);
 
 	}
-
+#ifdef USB_DEBUG
+	pr_err("%s end otg_state:%d work:%d\n", __func__, mdwc->otg_state, work);
+#endif
 	if (work)
 		schedule_delayed_work(&mdwc->sm_work, delay);
 

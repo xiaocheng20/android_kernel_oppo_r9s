@@ -602,6 +602,12 @@ static int cpufreq_stat_notifier_policy(struct notifier_block *nb,
 	if (val == CPUFREQ_UPDATE_POLICY_CPU) {
 		cpufreq_stats_update_policy_cpu(policy);
 		return 0;
+#ifdef VENDOR_EDIT
+	/* fangpan@Swdp.shanghai 2016-11-19 fix the CPUFREQ_REMOVE_POLICY exception*/
+	} else if (val == CPUFREQ_REMOVE_POLICY) {
+		__cpufreq_stats_free_table(policy);
+		return 0;
+#endif
 	}
 
 	table = cpufreq_frequency_get_table(cpu);
@@ -621,8 +627,12 @@ static int cpufreq_stat_notifier_policy(struct notifier_block *nb,
 
 	if (val == CPUFREQ_CREATE_POLICY)
 		ret = __cpufreq_stats_create_table(policy, table, count);
+#ifndef VENDOR_EDIT
+	/* fangpan@Swdp.shanghai 2016-11-19 fix the CPUFREQ_REMOVE_POLICY exception*/
 	else if (val == CPUFREQ_REMOVE_POLICY)
 		__cpufreq_stats_free_table(policy);
+#endif
+
 
 	return ret;
 }
