@@ -56,6 +56,12 @@ static int change_memory_common(unsigned long addr, int numpages,
 			return -EINVAL;
 	}
 
+#ifdef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 80f93bfd16f31619c2e888bd69d474afd20e497c
+	if (!numpages)
+		return 0;
+#endif
+
 	data.set_mask = set_mask;
 	data.clear_mask = clear_mask;
 

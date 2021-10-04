@@ -325,8 +325,16 @@ $(INSTALL_TARGETS):
 
 dtbs: scripts
 	$(Q)$(MAKE) $(build)=$(boot)/dts MACHINE=$(MACHINE) dtbs
-	$(foreach DIR, $(DTSSUBDIR), $(Q)$(MAKE) $(build)=$(boot)/dts/$(DIR) MACHINE=$(MACHINE) dtbs)
-
+#	$(foreach DIR, $(DTSSUBDIR), $(Q)$(MAKE) $(build)=$(boot)/dts/$(DIR) MACHINE=$(MACHINE) dtbs)
+#ifeq ($(OPPO_TARGET_DEVICE),MSM_16017)
+	$(Q)$(MAKE) $(build)=$(boot)/dts/16017 MACHINE=$(MACHINE) dtbs
+#else ifeq ($(OPPO_TARGET_DEVICE),MSM_16027)	
+	$(Q)$(MAKE) $(build)=$(boot)/dts/16027 MACHINE=$(MACHINE) dtbs
+#else
+	$(Q)$(MAKE) $(build)=$(boot)/dts/16061 MACHINE=$(MACHINE) dtbs
+#endif	
+#wangjimin  hantong modify it for 32bit
+#	$(foreach DIR, $(DTSSUBDIR), $(Q)$(MAKE) $(build)=$(boot)/dts/$(DIR) MACHINE=$(MACHINE) dtbs)
 zImage-dtb: vmlinux scripts dtbs
 	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) DTSSUBDIR=$(DTSSUBDIR) $(boot)/$@
 
