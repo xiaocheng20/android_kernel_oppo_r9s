@@ -322,8 +322,13 @@ void persistent_ram_save_old(struct persistent_ram_zone *prz)
 	}
 
 	prz->old_log_size = size;
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for record pstore log
 	memcpy(prz->old_log, &buffer->data[start], size - start);
 	memcpy(prz->old_log + size - start, &buffer->data[0], start);
+#else
+	memcpy_fromio(prz->old_log, &buffer->data[start], size - start);
+	memcpy_fromio(prz->old_log + size - start, &buffer->data[0], start);
+#endif
 }
 
 int notrace persistent_ram_write(struct persistent_ram_zone *prz,

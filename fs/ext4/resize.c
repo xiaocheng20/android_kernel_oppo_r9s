@@ -186,7 +186,12 @@ static struct ext4_new_flex_group_data *alloc_flex_gd(unsigned long flexbg_size)
 	if (flex_gd == NULL)
 		goto out3;
 
+#ifndef VENDOR_EDIT
+// Jingchun.Wang@Phone.Bsp.Driver, 2016/08/10  Modify for fix potential integer overflow 
 	if (flexbg_size >= UINT_MAX / sizeof(struct ext4_new_flex_group_data))
+#else /*VENDOR_EDIT*/
+	if (flexbg_size >= UINT_MAX / sizeof(struct ext4_new_group_data))
+#endif /*VENDOR_EDIT*/
 		goto out2;
 	flex_gd->count = flexbg_size;
 

@@ -43,6 +43,13 @@ config PROC_VMCORE
         help
         Exports the dump image of crashed kernel in ELF format.
 
+config VM_STATE
+	bool "/proc/vmstat support"
+	default y
+        help
+        Exports the vm stat to userspace.
+
+
 config PROC_SYSCTL
 	bool "Sysctl support (/proc/sys)" if EXPERT
 	depends on PROC_FS
@@ -71,3 +78,11 @@ config PROC_PAGE_MONITOR
 	  /proc/pid/smaps, /proc/pid/clear_refs, /proc/pid/pagemap,
 	  /proc/kpagecount, and /proc/kpageflags. Disabling these
           interfaces will reduce the size of the kernel by approximately 4kb.
+#ifdef VENDOR_EDIT
+#//Huacai.Zhou@PSW.BSP.kernel.Peformance, 2018/06/18, add foreground process opt support
+config OPPO_FG_OPT
+	bool "Enable /proc/fg_info/ if EXPERT"
+	default y
+	help
+	  Add foreground process optimize support to promote performance .
+#endif /*VENDOR_EDIT*/

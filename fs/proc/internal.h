@@ -154,6 +154,13 @@ extern int proc_pid_status(struct seq_file *, struct pid_namespace *,
 			   struct pid *, struct task_struct *);
 extern int proc_pid_statm(struct seq_file *, struct pid_namespace *,
 			  struct pid *, struct task_struct *);
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+extern int proc_pid_vmstat(struct seq_file *, struct pid_namespace *,
+			 struct pid *, struct task_struct *);
+#endif
+#endif
 
 /*
  * base.c
