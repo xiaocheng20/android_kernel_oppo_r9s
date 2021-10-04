@@ -668,8 +668,10 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 		}
 
 		rc = msm_isp_proc_cmd(vfe_dev, &cmd_next.cfg_cmd);
-		if (rc < 0)
+		if (rc < 0) {
 			pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+			break;
+		}
 
 		cmd = cmd_next;
 	}
