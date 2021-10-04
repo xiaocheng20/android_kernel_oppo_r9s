@@ -301,7 +301,7 @@
 	};
 
 	int_codec: sound {
-		status = "disabled";
+		/*status = "disabled";*/
 		compatible = "qcom,msm8952-audio-codec";
 		qcom,model = "msm8952-snd-card-mtp";
 		reg = <0xc051000 0x4>,
@@ -313,12 +313,19 @@
 			    "csr_gp_io_lpaif_pri_pcm_pri_mode_muxsel",
 			    "csr_gp_io_mux_quin_ctl";
 
+    /* VENDOR_EDIT: John.Xu@PhoneSw.AudioDriver, 2015/11/17, Modify for tfa9890 */
+    /*
 		qcom,msm-ext-pa = "primary";
+    */
+		qcom,msm-ext-pa = "quaternary", "quinary";
+    /* VENDOR_EDIT: John.Xu@PhoneSw.AudioDriver, 2015/11/17, Modify End */
+
 		qcom,msm-mclk-freq = <9600000>;
-		qcom,msm-mbhc-hphl-swh = <0>;
+		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <0>;
 		qcom,msm-hs-micbias-type = "external";
 		qcom,msm-micbias1-ext-cap;
+		qcom,msm-micbias2-ext-cap;
 		qcom,audio-routing =
 			"RX_BIAS", "MCLK",
 			"SPK_RX_BIAS", "MCLK",
@@ -328,11 +335,14 @@
 			"MIC BIAS External", "Secondary Mic",
 			"AMIC1", "MIC BIAS External",
 			"AMIC2", "MIC BIAS External2",
-			"AMIC3", "MIC BIAS External",
+			"AMIC3", "MIC BIAS External";
+			/*OPPO 2016-06-15 zhzhyon@AudioDriver Delete for sound config*/
+			/*
 			"WSA_SPK OUT", "VDD_WSA_SWITCH",
 			"SpkrMono WSA_IN", "WSA_SPK OUT";
 
-		qcom,hdmi-dba-codec-rx;
+		qcom,hdmi-dba-codec-rx;*/
+		/*OPPO 2016-06-15 zhzhyon@AudioDriver Delete end*/
 
 		qcom,msm-gpios =
 			"pri_i2s",

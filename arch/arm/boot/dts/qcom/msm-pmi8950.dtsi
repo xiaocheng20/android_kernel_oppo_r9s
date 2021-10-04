@@ -195,27 +195,114 @@
 				status = "disabled";
 			};
 		};
-
+//#ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,add 2016/6/10 for led
+		qcom,leds@a100 {
+			status = "okay";
+			reg = <0xa100 0x100>;
+			compatible = "qcom,leds-qpnp";
+			qcom,led_mpp_2 {
+				label = "mpp";
+				linux,name = "button-backlight";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <5>;
+				qcom,current-setting = <5>;
+				qcom,id = <6>;
+				qcom,mode = "manual";
+				qcom,source-sel = <1>;
+				qcom,mode-ctrl = <0x60>;
+			};			
+		};
+		
+//#endif //VENDOR_EDIT
+	
 		pmi8950_charger: qcom,qpnp-smbcharger {
 			spmi-dev-container;
 			compatible = "qcom,qpnp-smbcharger";
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			qcom,iterm-ma = <100>;
-			qcom,float-voltage-mv = <4200>;
+			//qcom,iterm-ma = <100>;
+			qcom,float-voltage-mv = <4320>;
 			qcom,resume-delta-mv = <200>;
-			qcom,chg-inhibit-fg;
+			//qcom,chg-inhibit-fg;
 			qcom,rparasitic-uohm = <100000>;
 			qcom,bms-psy-name = "bms";
-			qcom,thermal-mitigation = <1500 700 600 0>;
-			qcom,parallel-usb-min-current-ma = <1400>;
-			qcom,parallel-usb-9v-min-current-ma = <900>;
-			qcom,parallel-allowed-lowering-ma = <500>;
+			//qcom,thermal-mitigation = <1500 700 600 0>;
+//#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/12 modify for not use parallel charger
+			//qcom,parallel-usb-min-current-ma = <1400>;
+			//qcom,parallel-usb-9v-min-current-ma = <900>;
+			//qcom,parallel-allowed-lowering-ma = <500>;
+//#endif /*VENDOR_EDIT*/
 			qcom,pmic-revid = <&pmi8950_revid>;
 			qcom,force-aicl-rerun;
 			qcom,aicl-rerun-period-s = <180>;
 			qcom,autoadjust-vfloat;
+
+//#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/06/12 add for charge
+			qcom,input_current_charger_ma = <2000>;
+			qcom,input_current_usb_ma = <500>;
+			qcom,input_current_led_ma = <1200>;
+			qcom,input_current_led_ma_forcmcc = <500>;
+			qcom,input_current_camera_ma = <500>;
+			qcom,iterm-ma = <150>;			
+			qcom,recharge-mv = <100>;
+			//qcom,suspend_after_full;
+			qcom,external_gauge;
+			
+			qcom,removed_bat_decidegc = <190>;  /*<-19C*/
+			
+			qcom,cold_bat_decidegc = <30>;  /*-3C~0C*/
+			qcom,temp_cold_vfloat_mv = <4000>;
+			qcom,temp_cold_fastchg_current_ma = <325>;
+			
+			qcom,little_cold_bat_decidegc = <0>;	/*0C~5C*/
+			qcom,temp_little_cold_vfloat_mv = <4320>;
+			qcom,temp_little_cold_fastchg_current_ma = <448>;
+			
+			qcom,cool_bat_decidegc = <50>;	/*5C~12C*/
+			qcom,temp_cool_vfloat_mv = <4320>;
+			qcom,temp_cool_fastchg_current_ma_high = <747>;
+			qcom,temp_cool_fastchg_current_ma_low = <448>;
+			
+			qcom,little_cool_bat_decidegc = <120>;	/*12C~16C*/
+			qcom,temp_little_cool_vfloat_mv = <4320>;
+			qcom,temp_little_cool_fastchg_current_ma = <1196>;	
+			
+			qcom,normal_bat_decidegc = <160>;	/*16C~45C*/
+			qcom,temp_normal_fastchg_current_ma = <1910>;
+			qcom,temp_normal_vfloat_mv_normalchg = <4320>;
+			qcom,temp_normal_vfloat_mv_voocchg = <4352>;
+			
+			qcom,warm_bat_decidegc = <450>;		/*45C~55C*/
+			qcom,temp_warm_vfloat_mv = <4100>;
+			qcom,temp_warm_fastchg_current_ma = <747>;
+			
+			qcom,hot_bat_decidegc = <530>;
+			
+			qcom,non_standard_vfloat_mv = <4000>;
+			qcom,non_standard_fastchg_current_ma = <512>;
+
+			qcom,non_standard_vfloat_sw_limit = <3960>;
+			qcom,cold_vfloat_sw_limit = <3960>;
+			qcom,little_cold_vfloat_sw_limit = <4330>;
+			qcom,cool_vfloat_sw_limit = <4330>;
+			qcom,little_cool_vfloat_sw_limit = <4330>;
+			qcom,normal_vfloat_sw_limit = <4330>;
+			qcom,warm_vfloat_sw_limit = <4060>;
+			
+			qcom,max_chg_time_sec = <36000>;
+			qcom,charger_hv_thr = <5800>;
+			qcom,charger_lv_thr = <3400>;
+			qcom,vbatt_full_thr = <4400>;
+			qcom,vbatt_hv_thr = <4500>;
+			qcom,vooc_project;
+			qcom,chg_ctrl_by_lcd;
+			qcom,chg_ctrl_by_camera;
+//#endif /* VENDOR_EDIT */
 
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
@@ -404,12 +491,16 @@
 			qcom,ibat-polling-delay-ms = <100>;
 			qcom,inhibit-derating-ua = <550000>;
 		};
-
+//#ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,add 2016/6/10 for led
+/*
 		qcom,leds@a100 {
 			compatible = "qcom,leds-qpnp";
 			reg = <0xa100 0x100>;
 			label = "mpp";
 		};
+*/
+//#endif //VENDOR_EDIT		
 	};
 
 	qcom,pmi8950@3 {
@@ -531,6 +622,8 @@
 			qcom,led-strings-list = [00 01];
 			qcom,en-ext-pfet-sc-pro;
 			qcom,cons-sync-write-delay-us = <1000>;
+			//Shengjun.Gou@SWDP.MultiMedia, 2016/06/09,  Add for 16017 LCD driver
+			qcom,disp-type-amoled;
 		};
 
 		flash_led: qcom,leds@d300 {
@@ -612,8 +705,11 @@
 				};
 			};
 		};
-
+		
+//ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,modified 2016.06.03 for vol	
 		pmi_haptic: qcom,haptic@c000 {
+			status = "okay";
 			compatible = "qcom,qpnp-haptic";
 			reg = <0xc000 0x100>;
 			interrupts = <0x3 0xc0 0x0>,
@@ -624,17 +720,19 @@
 			qcom,wave-play-rate-us = <5263>;
 			qcom,actuator-type = "erm";
 			qcom,wave-shape = "square";
-			qcom,vmax-mv = <2000>;
+			qcom,vmax-mv = <2900>;
 			qcom,ilim-ma = <800>;
 			qcom,sc-deb-cycles = <8>;
 			qcom,int-pwm-freq-khz = <505>;
-			qcom,en-brake;
+			//qcom,en-brake;
 			qcom,brake-pattern = [03 03 00 00];
 			qcom,use-play-irq;
-			qcom,use-sc-irq;
+			//qcom,use-sc-irq;
 			qcom,wave-samples = [3e 3e 3e 3e 3e 3e 3e 3e];
 			qcom,wave-rep-cnt = <1>;
 			qcom,wave-samp-rep-cnt = <1>;
+			qcom,vib-timemin-ms = <35>;
 		};
+//#endif/*VENDOR_EDIT*/		
 	};
 };
