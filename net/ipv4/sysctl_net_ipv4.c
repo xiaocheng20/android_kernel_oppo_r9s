@@ -804,6 +804,17 @@ static struct ctl_table ipv4_table[] = {
 		.extra1		= &tcp_use_userconfig_min,
 		.extra2		= &tcp_use_userconfig_max,
 	},
+    #ifdef VENDOR_EDIT
+    //Ming.Liu@Connectivity.WiFi.Network.quality.FN7, 2016/10/09,
+    //add for: [monitor tcp info]
+	{
+		.procname	= "tcp_info_print",
+		.data		= &sysctl_tcp_info_print,
+		.maxlen		= sizeof(int),
+		.mode		= 0664,
+		.proc_handler	= proc_do_print_tcpinfo
+	},
+    #endif /* VENDOR_EDIT */
 
 	{ }
 };
