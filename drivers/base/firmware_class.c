@@ -1271,15 +1271,28 @@ static int assign_firmware_buf(struct firmware *fw, struct device *device,
 /* called from request_firmware() and request_firmware_work_func() */
 static int _request_firmware(struct fw_desc *desc)
 {
-	struct firmware *fw;
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for kernel patch to Fixes: 471b095dfe0d ("firmware_class: make sure fw requests contain a name")
+		struct firmware *fw;
+#else
+		struct firmware *fw = NULL;
+#endif
+
 	long timeout;
 	int ret;
 
 	if (!desc->firmware_p)
 		return -EINVAL;
 
-	if (!desc->name || desc->name[0] == '\0')
-		return -EINVAL;
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify for kernel patch to Fixes: 471b095dfe0d ("firmware_class: make sure fw requests contain a name")
+		if (!desc->name || desc->name[0] == '\0')
+			return -EINVAL;
+#else
+		if (!desc->name || desc->name[0] == '\0') {
+			ret = -EINVAL;
+			goto out;
+		}
+#endif
+
 
 	ret = _request_firmware_prepare(&fw, desc);
 	if (ret <= 0) /* error or already assigned */

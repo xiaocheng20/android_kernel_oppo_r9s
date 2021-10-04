@@ -291,8 +291,15 @@ static void power_supply_callback(struct power_supply *psy)
 		return;
 	}
 
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/22 modify for soc get
 	if (!bms_psy)
 		bms_psy = power_supply_get_by_name("bms");
+#else
+	if (!bms_psy)
+		bms_psy = power_supply_get_by_name("battery");
+#endif /* VENDOR_EDIT */
+
 	if (bms_psy) {
 		battery_percentage = bms_psy->get_property(bms_psy,
 				POWER_SUPPLY_PROP_CAPACITY, &ret);
@@ -1056,10 +1063,18 @@ static int convert_to_int(const char *buf, int *val)
 
 	if (!gbcl)
 		return -EPERM;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/22 modify for BCL enable
 	if (gbcl->bcl_mode != BCL_DEVICE_DISABLED) {
 		pr_err("BCL is not disabled\n");
 			return -EINVAL;
 	}
+#else
+	if (gbcl->bcl_mode != BCL_DEVICE_ENABLED) {
+		pr_err("BCL is not disabled\n");
+			return -EINVAL;
+	}
+#endif /* VENDOR_EDIT */
 
 	ret = kstrtoint(buf, 10, val);
 	if (ret || (*val < 0)) {

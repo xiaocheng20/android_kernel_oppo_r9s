@@ -67,7 +67,11 @@ static const struct file_operations uid_stat_read_atomic_int_fops = {
 	.open		= uid_stat_read_atomic_int_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
+#ifndef VENDOR_EDIT //yixue.ge@bsp.drv modify google patch for memleadk at slab
 	.release	= seq_release,
+#else
+	.release	= single_release,
+#endif
 };
 
 /* Create a new entry for tracking the specified uid. */

@@ -27,6 +27,9 @@
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/spm-regulator.h>
 #include <soc/qcom/spm.h>
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+#include <trace/events/regulator.h>
+//#endif
 
 #if defined(CONFIG_ARM64) || (defined(CONFIG_ARM) && defined(CONFIG_ARM_PSCI))
 	asmlinkage int __invoke_psci_fn_smc(u64, u64, u64, u64);
@@ -378,6 +381,10 @@ static int _spm_regulator_set_voltage(struct regulator_dev *rdev)
 	return rc;
 }
 
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+static int spm_func_call_counter;
+//#endif
+
 static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
 					int max_uV, unsigned *selector)
 {
@@ -385,6 +392,14 @@ static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
 	const struct voltage_range *range = vreg->range;
 	int uV = min_uV;
 	unsigned vlevel;
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	int rc = 0;
+
+	spm_func_call_counter++;
+
+	trace_spm_regulator_set_voltage("spm_vreg",
+			spm_func_call_counter, vreg->last_set_uV, uV);
+//#endif
 
 	if (uV < range->set_point_min_uV && max_uV >= range->set_point_min_uV)
 		uV = range->set_point_min_uV;
@@ -393,7 +408,12 @@ static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
 		pr_err("%s: request v=[%d, %d] is outside possible v=[%d, %d]\n",
 			vreg->rdesc.name, min_uV, max_uV,
 			range->set_point_min_uV, range->max_uV);
-		return -EINVAL;
+	//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+		//return -EINVAL;
+	//#else
+		rc = -EINVAL;
+		goto done;
+	//endif
 	}
 
 	vlevel = spm_regulator_uv_to_vlevel(vreg, uV);
@@ -402,17 +422,38 @@ static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
 	if (uV > max_uV) {
 		pr_err("%s: request v=[%d, %d] cannot be met by any set point\n",
 			vreg->rdesc.name, min_uV, max_uV);
-		return -EINVAL;
+	//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+		//return -EINVAL;
+	//#else
+		rc = -EINVAL;
+		goto done;
+	//endif
 	}
 
 	*selector = spm_regulator_vlevel_to_selector(vreg, vlevel);
 	vreg->vlevel = vlevel;
 	vreg->uV = uV;
 
-	if (!vreg->online)
-		return 0;
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	//if (!vreg->online)
+	//	return 0;
+//#else
+	if (!vreg->online) {
+		rc = 0;
+		goto done;
+	}
+//#endif
 
-	return _spm_regulator_set_voltage(rdev);
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	//return _spm_regulator_set_voltage(rdev);
+//#else
+	rc = _spm_regulator_set_voltage(rdev);
+
+done:
+	trace_spm_regulator_set_voltage_complete("spm_vreg",
+			spm_func_call_counter, vreg->last_set_uV, rc);
+	return rc;
+//#endif
 }
 
 static int spm_regulator_list_voltage(struct regulator_dev *rdev,

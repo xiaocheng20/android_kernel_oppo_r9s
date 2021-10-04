@@ -649,8 +649,25 @@ static void cpufreq_interactive_timer(unsigned long data)
 	if (new_freq >= ppol->policy->max && !jump_to_max_no_ts)
 		ppol->max_freq_hyst_start_time = now;
 
+#ifdef VENDOR_EDIT
+//xiaocheng.li@Swdp.shanghai, 2016/4/7, Fix the logic defect of governor
+	/* Note:
+	 * pcpu->target_freq stands for the current freq recorded in governor.
+	 * The logic here is to prevent adjusting cpufreq if the newfreq equals
+	 * with cur freq. However, pcpu->target_freq may be not the same with
+	 * policy->cur (the actual freq value) if cpufreq updating failed occasionally.
+	 * Luckily that it can be recovered quickly (in most cases) once new_freq
+	 * is different with cur freq. However, It's hard to recover in the case that
+	 * cpu is fully busy and target_freq is always the same with policy->max.
+	 * So add more check here to avoid such risk.
+	 */
+	if (ppol->target_freq == new_freq && !(new_freq == ppol->policy->max &&
+			new_freq != ppol->policy->cur) &&
+			ppol->target_freq <= ppol->policy->cur) {
+#else
 	if (ppol->target_freq == new_freq &&
 			ppol->target_freq <= ppol->policy->cur) {
+#endif
 		trace_cpufreq_interactive_already(
 			max_cpu, pol_load, ppol->target_freq,
 			ppol->policy->cur, new_freq);
@@ -1657,7 +1674,10 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 	else
 		tunables = common_tunables;
 
-	BUG_ON(!tunables && (event != CPUFREQ_GOV_POLICY_INIT));
+	if(!tunables && (event != CPUFREQ_GOV_POLICY_INIT)) {
+		WARN_ON(1);
+		return -EBUSY;
+	}
 
 	switch (event) {
 	case CPUFREQ_GOV_POLICY_INIT:

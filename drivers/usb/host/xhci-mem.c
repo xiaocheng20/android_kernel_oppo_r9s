@@ -25,9 +25,19 @@
 #include <linux/slab.h>
 #include <linux/dmapool.h>
 #include <linux/dma-mapping.h>
-
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/09 modify for otg issue, QCM patch, CR1008115
+#include <linux/moduleparam.h>
+#endif /* VENDOR_EDIT */
 #include "xhci.h"
 #include "xhci-trace.h"
+
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/09 modify for otg issue, QCM patch, CR1008115
+static bool usb2_lpm_disable = true;
+module_param(usb2_lpm_disable, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(usb2_lpm_disable, "DISABLE USB2 LPM");
+#endif /* VENDOR_EDIT */
 
 /*
  * Allocates a generic ring segment from the ring pool, sets the dma address,
@@ -1885,6 +1895,15 @@ no_bw:
 	kfree(xhci->rh_bw);
 	kfree(xhci->ext_caps);
 
+#ifdef VENDOR_EDIT
+//zhenwenxian@BSP.Power.Basic, 2017/01/24, Add for linux patch usb: xhci: fix wild pointers in xhci_mem_cleanup
+	xhci->usb2_ports = NULL;
+	xhci->usb3_ports = NULL;
+	xhci->port_array = NULL;
+	xhci->rh_bw = NULL;
+	xhci->ext_caps = NULL;
+	
+#endif /* VENDOR_EDIT */
 	xhci->page_size = 0;
 	xhci->page_shift = 0;
 	xhci->bus_state[0].bus_suspended = 0;
@@ -2116,9 +2135,18 @@ static void xhci_add_in_port(struct xhci_hcd *xhci, unsigned int num_ports,
 		xhci_dbg_trace(xhci, trace_xhci_dbg_init,
 				"xHCI 1.0: support USB2 software lpm");
 		xhci->sw_lpm_support = 1;
+#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/09 modify for otg issue, QCM patch, CR1008115
 		if (temp & XHCI_HLC) {
+#else
+		if (!usb2_lpm_disable && (temp & XHCI_HLC)) {
+#endif /* VENDOR_EDIT */
 			xhci_dbg_trace(xhci, trace_xhci_dbg_init,
 					"xHCI 1.0: support USB2 hardware lpm");
+#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/08/09 modify for otg issue, QCM patch, CR1008115
+			xhci_err(xhci, "xHCI 1.0: support USB2 hardware lpm");
+#endif /* VENDOR_EDIT */
 			xhci->hw_lpm_support = 1;
 		}
 	}

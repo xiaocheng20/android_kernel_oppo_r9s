@@ -4,4 +4,5 @@ source "drivers/soc/qcom/Kconfig"
 source "drivers/soc/ti/Kconfig"
 source "drivers/soc/versatile/Kconfig"
 
+source "drivers/soc/oppo/Kconfig"
 endmenu

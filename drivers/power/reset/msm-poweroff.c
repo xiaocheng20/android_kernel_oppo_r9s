@@ -59,7 +59,18 @@ static void scm_disable_sdi(void);
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
 */
-static int download_mode = 1;
+#ifdef VENDOR_EDIT //Tong.han@BSP.group.TP, Modify for selct dump config for diffrent sw version,2015/06/28
+#if defined(CONFIG_OPPO_DAILY_BUILD)
+	static int download_mode = 1;
+#else
+	#if defined(CONFIG_OPPO_SPECIAL_BUILD) //if this is a aging test build ,we should enable download mode default
+	static int download_mode = 1;
+	#else
+	static int download_mode = 0;
+	#endif
+#endif
+#endif/*VENDOR_EDIT*/
+
 static struct kobject dload_kobj;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
@@ -147,6 +158,7 @@ static bool get_dload_mode(void)
 	return dload_mode_enabled;
 }
 
+#if 0
 static void enable_emergency_dload_mode(void)
 {
 	int ret;
@@ -171,6 +183,7 @@ static void enable_emergency_dload_mode(void)
 	if (ret)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
+#endif
 
 static int dload_set(const char *val, struct kernel_param *kp)
 {
@@ -285,6 +298,23 @@ static void msm_restart_prepare(const char *cmd)
 				(cmd != NULL && cmd[0] != '\0'));
 	}
 
+#ifdef VENDOR_EDIT
+//yixue.ge@bsp.drv enable warmreset and set bootmode as kernel when panic happen
+	if (in_panic){
+		//warm reset
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+		qpnp_pon_set_restart_reason(
+					PON_RESTART_REBOOT_KERNEL);
+		flush_cache_all();
+
+		/*outer_flush_all is not supported by 64bit kernel*/
+#ifndef CONFIG_ARM64
+		outer_flush_all();
+#endif
+		return;
+	}
+#endif /* VENDOR_EDIT */
+
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (need_warm_reset) {
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
@@ -292,6 +322,8 @@ static void msm_restart_prepare(const char *cmd)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 	}
 
+#ifndef VENDOR_EDIT
+/* OPPO 2013.07.09 hewei modify begin for restart mode*/
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			qpnp_pon_set_restart_reason(
@@ -330,6 +362,86 @@ static void msm_restart_prepare(const char *cmd)
 			__raw_writel(0x77665501, restart_reason);
 		}
 	}
+#else //VENDOR_EDIT
+	if (cmd != NULL) {
+		#ifndef DISABLE_FASTBOOT_CMDS //disable fastboot modem at release soft
+		if (!strncmp(cmd, "bootloader", 10)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_BOOTLOADER);
+			__raw_writel(0x77665500, restart_reason);
+		} else 
+		#endif
+		if (!strncmp(cmd, "recovery", 8)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_RECOVERY);
+			__raw_writel(0x77665502, restart_reason);
+		} else if (!strcmp(cmd, "rtc")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_RTC);
+			__raw_writel(0x77665503, restart_reason);
+		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_DMVERITY_CORRUPTED);
+			__raw_writel(0x77665508, restart_reason);
+		} else if (!strcmp(cmd, "dm-verity enforcing")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_DMVERITY_ENFORCE);
+			__raw_writel(0x77665509, restart_reason);
+		} else if (!strcmp(cmd, "keys clear")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_KEYS_CLEAR);
+			__raw_writel(0x7766550a, restart_reason);
+		} else if (!strncmp(cmd, "oem-", 4)) { //we donot need oem-
+			unsigned long code;
+			int ret;
+			ret = kstrtoul(cmd + 4, 16, &code);
+			if (!ret)
+				__raw_writel(0x6f656d00 | (code & 0xff),
+					     restart_reason);
+#if 0
+		} else if (!strncmp(cmd, "edl", 3)) {
+			enable_emergency_dload_mode();
+#endif
+		} else if (!strncmp(cmd, "rf", 2)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_RF_MODE);
+		} else if (!strncmp(cmd, "wlan", 4)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_WLAN_MODE);
+		#ifdef USE_MOS_MODE	
+		} else if (!strncmp(cmd, "mos", 3)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_MOS_MODE);
+		#endif			   
+		} else if (!strncmp(cmd, "ftm", 3)) {
+			qpnp_pon_set_restart_reason(
+					PON_RESTART_FACTORY_MODE);
+		} else if (!strncmp(cmd, "kernel", 6)) {
+			qpnp_pon_set_restart_reason(
+					PON_RESTART_REBOOT_KERNEL);
+        } else if (!strncmp(cmd, "modem", 5)) {
+        	qpnp_pon_set_restart_reason(
+					PON_RESTART_REBOOT_MODEM);
+        } else if (!strncmp(cmd, "android", 7)) {
+        	qpnp_pon_set_restart_reason(
+					PON_RESTART_REBOOT_ANDROID);
+		} else if (!strncmp(cmd, "silence", 7)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_SILENCE);
+		}else if (!strncmp(cmd, "sau", 3)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_SAU);	
+		} else {
+			qpnp_pon_set_restart_reason(
+//				PON_RESTART_REASON_UNKNOWN);
+				PON_RESTART_REBOOT_NORMAL);
+		}
+	}else{
+		qpnp_pon_set_restart_reason(
+				PON_RESTART_REBOOT_NORMAL);
+	}
+/* OPPO 2013.07.09 hewei modify en for restart mode*/
+#endif //VENDOR_EDIT
 
 	flush_cache_all();
 
@@ -556,6 +668,12 @@ skip_sysfs_create:
 	msm_ps_hold = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(msm_ps_hold))
 		return PTR_ERR(msm_ps_hold);
+		
+#ifdef VENDOR_EDIT
+/* OPPO 2013.07.09 hewei added begin for default restart reason*/
+	__raw_writel(0x7766550a, restart_reason);
+/* OPPO 2013.07.09 hewei added end for default restart reason*/
+#endif //VENDOR_EDIT
 
 	mem = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 					   "tcsr-boot-misc-detect");

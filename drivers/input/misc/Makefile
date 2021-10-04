@@ -71,3 +71,14 @@ obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
+
+#ifdef VENDOR_EDIT	
+#Lycan.Wang@Prd.BasicDrv, 2015-04-11 Add for fingerprint driver	
+obj-$(CONFIG_BTP_FPC1140)  += fpc1020_tee.o
+#fpc1020_main.o fpc1020_common.o fpc1020_input_nav.o fpc1020_navlib.o fpc1020_capture.o fpc1020_regulator.o	
+#endif /* VENDOR_EDIT */
+#ifdef VENDOR_EDIT
+#Ping.Liu@BSP.Fingerprint.Basic, 2017/01/01, 
+#add for goodixfp.
+obj-$(CONFIG_BTP_GDX)  += gf_spi.o gf_platform.o
+#endif /* VENDOR_EDIT */

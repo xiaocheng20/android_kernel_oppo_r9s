@@ -334,6 +334,13 @@ static int cmdq_host_alloc_tdl(struct cmdq_host *cq_host)
 	return 0;
 }
 
+#ifdef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/11/16 for MICRON 3224 to fixup CQSSC1 to 0x7003C
+extern unsigned int emmc_manfid;
+#define CID_MANFAC_ID   			0x13
+//#define SEND_QSR_INTERVAL_MICRON	0x7003C
+#define SEND_QSR_INTERVAL_MICRON	0x70040
+#endif/*VENDOR_EDIT*/
+
 static int cmdq_enable(struct mmc_host *mmc)
 {
 	int err = 0;
@@ -395,8 +402,19 @@ static int cmdq_enable(struct mmc_host *mmc)
 	cmdq_writel(cq_host, mmc->card->rca, CQSSC2);
 
 	/* send QSR at lesser intervals than the default */
-	cmdq_writel(cq_host, SEND_QSR_INTERVAL, CQSSC1);
-
+#ifndef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/11/16 for MICRON 3224 to fixup CQSSC1 to 0x7003C
+//	cmdq_writel(cq_host, SEND_QSR_INTERVAL, CQSSC1);
+#else/*VENDOR_EDIT*/
+	//Change the value of CQSSC1 to 0x7003C with mmc_fixups when setting CQSSC1 registers for Micron¡¯s eMCP
+	if(mmc->card->cid.manfid == CID_MANFAC_ID)
+	{
+		cmdq_writel(cq_host, SEND_QSR_INTERVAL_MICRON, CQSSC1);
+	} else {
+		cmdq_writel(cq_host, SEND_QSR_INTERVAL, CQSSC1);
+	}
+//	pr_err("cmdq_enable,mmc->card->cid.manfid = %x, emmc_manfid = %x,cmdq_readl(cq_host, CQSSC1) = 0x%x\r\n",mmc->card->cid.manfid,emmc_manfid,cmdq_readl(cq_host, CQSSC1));
+#endif/*VENDOR_EDIT*/
+	
 	/* enable bkops exception indication */
 	if (mmc_card_configured_manual_bkops(mmc->card) &&
 	    !mmc_card_configured_auto_bkops(mmc->card))

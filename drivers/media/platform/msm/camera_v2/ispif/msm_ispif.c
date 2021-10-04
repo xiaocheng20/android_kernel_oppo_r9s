@@ -47,7 +47,12 @@
 
 #define ISPIF_TIMEOUT_SLEEP_US                1000
 #define ISPIF_TIMEOUT_ALL_US               1000000
+#ifndef VENDOR_EDIT
+/*Modify by Zhengrong.Zhang@Camera 20160813 for debug*/
 #define ISPIF_SOF_DEBUG_COUNT                    0
+#else
+#define ISPIF_SOF_DEBUG_COUNT                    5
+#endif
 
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
@@ -73,7 +78,7 @@ static void msm_ispif_io_dump_reg(struct ispif_device *ispif)
 
 
 static inline int msm_ispif_is_intf_valid(uint32_t csid_version,
-	uint8_t intf_type)
+	enum msm_ispif_vfe_intf intf_type)
 {
 	return ((csid_version <= CSID_VERSION_V22 && intf_type != VFE0) ||
 		(intf_type >= VFE_MAX)) ? false : true;
@@ -132,7 +137,7 @@ static void msm_ispif_get_pack_mask_from_cfg(
 			pack_mask[0] |= temp;
 		CDBG("%s:num %d cid %d mode %d pack_mask %x %x\n",
 			__func__, entry->num_cids, entry->cids[i],
-			pack_cfg[i].pack_mode,
+			pack_cfg[entry->cids[i]].pack_mode,
 			pack_mask[0], pack_mask[1]);
 
 	}
@@ -162,6 +167,16 @@ static int msm_ispif_config2(struct ispif_device *ispif,
 			params->num);
 		rc = -EINVAL;
 		return rc;
+	}
+
+	for (i = 0; i < params->num; i++) {
+		int j;
+
+		if (params->entries[i].num_cids > MAX_CID_CH_v2)
+			return -EINVAL;
+		for (j = 0; j < params->entries[i].num_cids; j++)
+			if (params->entries[i].cids[j] >= CID_MAX)
+				return -EINVAL;
 	}
 
 	for (i = 0; i < params->num; i++) {
@@ -1179,8 +1194,14 @@ static void ispif_process_irq(struct ispif_device *ispif,
 	if (out[vfe_id].ispifIrqStatus0 &
 			ISPIF_IRQ_STATUS_PIX_SOF_MASK) {
 		if (ispif->ispif_sof_debug < ISPIF_SOF_DEBUG_COUNT)
+#ifndef VENDOR_EDIT
+/*Modify by Zhengrong.Zhang@Camera 20160813 for debug*/
 			pr_err("%s: PIX0 frame id: %u\n", __func__,
 				ispif->sof_count[vfe_id].sof_cnt[PIX0]);
+#else
+			pr_err("%s: PIX0 frame id[vfe %d]: %u\n", __func__,
+				vfe_id, ispif->sof_count[vfe_id].sof_cnt[PIX0]);
+#endif
 		ispif->sof_count[vfe_id].sof_cnt[PIX0]++;
 		ispif->ispif_sof_debug++;
 	}
@@ -1421,6 +1442,10 @@ static void msm_ispif_release(struct ispif_device *ispif)
 	if (cam_config_ahb_clk(NULL, 0, CAM_AHB_CLIENT_ISPIF,
 		CAM_AHB_SUSPEND_VOTE) < 0)
 		pr_err("%s: failed to remove vote for AHB\n", __func__);
+#ifdef VENDOR_EDIT
+/*Modify by Zhengrong.Zhang@Camera 20160813 for debug*/
+	ispif->ispif_sof_debug = 0;
+#endif
 }
 
 static long msm_ispif_cmd(struct v4l2_subdev *sd, void *arg)

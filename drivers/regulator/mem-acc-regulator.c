@@ -26,6 +26,9 @@
 #include <linux/regulator/of_regulator.h>
 #include <linux/string.h>
 #include <soc/qcom/scm.h>
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+#include <trace/events/regulator.h>
+//#endif
 
 #define MEM_ACC_DEFAULT_SEL_SIZE	2
 
@@ -268,23 +271,48 @@ static void update_acc_reg(struct mem_acc_regulator *mem_acc_vreg, int corner)
 	}
 }
 
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+static u64 mem_func_call_counter;
+//#endif
+
 static int mem_acc_regulator_set_voltage(struct regulator_dev *rdev,
 		int corner, int corner_max, unsigned *selector)
 {
 	struct mem_acc_regulator *mem_acc_vreg = rdev_get_drvdata(rdev);
-	int i;
-
+	//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	//int i;
+	//#else
+	int i, rc = 0;
+	//#endif
+	
 	if (corner > mem_acc_vreg->num_corners) {
 		pr_err("Invalid corner=%d requested\n", corner);
-		return -EINVAL;
+	//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+		//return -EINVAL;
+	//#else
+		rc = -EINVAL;
+		goto done;
+	//#endif
 	}
 
 	pr_debug("old corner=%d, new corner=%d\n",
 			mem_acc_vreg->corner, corner);
 
-	if (corner == mem_acc_vreg->corner)
-		return 0;
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	//if (corner == mem_acc_vreg->corner)
+	//	return 0;
+//#else
+	mem_func_call_counter++;
 
+	trace_mem_acc_regulator_set_voltage("mem_acc_vreg",
+			mem_func_call_counter, mem_acc_vreg->corner,
+			corner);
+
+	if (corner == mem_acc_vreg->corner) {
+		rc = 0;
+		goto done;
+	}
+//#endif
 	/* go up or down one level at a time */
 	mutex_lock(&mem_acc_memory_mutex);
 
@@ -310,7 +338,14 @@ static int mem_acc_regulator_set_voltage(struct regulator_dev *rdev,
 
 	mem_acc_vreg->corner = corner;
 
-	return 0;
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+	//return 0;
+//#else
+done:
+	trace_mem_acc_regulator_set_voltage_complete("mem_acc_vreg",
+			mem_func_call_counter, corner, rc);
+	return rc;
+//#endif
 }
 
 static int mem_acc_regulator_get_voltage(struct regulator_dev *rdev)

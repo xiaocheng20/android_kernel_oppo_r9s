@@ -1114,6 +1114,12 @@ config TOUCHSCREEN_GT9XX
 
           If unsure, say N.
 
+
+#ifdef VENDOR_EDIT
+#Tong.han@Bsp.group.Tp,2016-08-12,Added for common touchpanel driver 
+source "drivers/input/touchscreen/oppo_touchscreen/Kconfig"
+#endif
+
 config TOUCHSCREEN_MAXIM_STI
 	tristate "Maxim based STI touchscreens"
 	depends on SPI_MASTER
@@ -1125,6 +1131,19 @@ config TOUCHSCREEN_MAXIM_STI
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called maxim_sti.
+
+#ifdef VENDOR_EDIT
+#Added by wanghao@Bsp.group.Tp for goodix_ic driver,2016-08-12 
+config GT5688_TOUCHPANEL_DRIVER	
+	bool "Goodix touchpanel GT5688 series"
+	depends on I2C
+	help
+	  Say Y here if you have a Goodix GT5688 touchscreen.
+	  GT5688 controllers are multi touch controllers which can
+	  report 5 touches at a time.
+
+          If unsure, say N.
+#endif
 
 source "drivers/input/touchscreen/gt9xx/Kconfig"
 

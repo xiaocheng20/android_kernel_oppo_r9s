@@ -3692,6 +3692,12 @@ static int mdss_mdp_hw_cursor_pipe_update(struct msm_fb_data_type *mfd,
 	req->transp_mask = img->bg_color & ~(0xff << var->transp.offset);
 
 	if (mfd->cursor_buf && (cursor->set & FB_CUR_SETIMAGE)) {
+		if (img->width * img->height * 4 > cursor_frame_size) {
+			pr_err("cursor image size is too large\n");
+			ret = -EINVAL;
+			goto done;
+		}
+
 		ret = copy_from_user(mfd->cursor_buf, img->data,
 				     img->width * img->height * 4);
 		if (ret) {
@@ -4773,6 +4779,10 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 	int rc;
 	struct mdss_overlay_private *mdp5_data;
 	struct mdss_mdp_ctl *ctl = NULL;
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    struct mdss_data_type *mdata;
+    #endif
 
 	if (!mfd)
 		return -ENODEV;
@@ -4828,6 +4838,12 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 		if (rc)
 			goto end;
 	}
+
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    mdata = mfd_to_mdata(mfd);
+    mdata->scm_set_allowable = true;
+    #endif
 
 panel_on:
 	if (IS_ERR_VALUE(rc)) {
@@ -4887,6 +4903,10 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 	struct mdss_mdp_mixer *mixer;
 	int need_cleanup;
 	int retire_cnt;
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    struct mdss_data_type *mdata;
+    #endif
 
 	if (!mfd)
 		return -ENODEV;
@@ -5027,6 +5047,11 @@ ctl_stop:
 	if (rc)
 		pr_err("unable to suspend w/pm_runtime_put (%d)\n", rc);
 
+    #ifdef VENDOR_EDIT
+    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
+    mdata = mfd_to_mdata(mfd);
+    mdata->scm_set_allowable = false;
+    #endif
 	return rc;
 }
 

@@ -135,6 +135,23 @@ enum dsi_pm_type {
 	DSI_MAX_PM
 };
 
+#ifdef VENDOR_EDIT
+/* YongPeng.Yi@SWDP.MultiMedia, 2016/06/29  Add for LCD TYPE START */
+enum {
+	LCD_16017_SAMSUNG_EA8064_FHD_VIDEO=0,
+	LCD_16017_SAMSUNG_EA8064_FHD_CMD,
+	LCD_16027_JDI_R63452_FHD_CMD,
+	LCD_16027_JDI_R63452_FHD_CMD_EVT,
+	LCD_16061_TIANMA_HX8394F_HD_VIDEO,
+	LCD_16061_BOE_HX8394F_HD_VIDEO,
+	LCD_16061_TRULY_HX8394F_HD_VIDEO,
+	LCD_16061_BOE_NT35521S_HD_VIDEO,
+	LCD_16061_BOE_NT35521S_B8_HD_VIDEO,
+	LCD_16061_TRULY_NT35521S_HD_VIDEO,
+	LCD_16061_TRULY_HX8394F_NEW_HD_VIDEO,
+	LCD_UNKNOW,
+};
+#endif /*VENDOR_EDIT*/
 /*
  * DSI controller states.
  *	CTRL_STATE_UNKNOWN - Unknown state of DSI controller.
@@ -430,6 +447,10 @@ struct mdss_dsi_ctrl_pdata {
 	int rst_gpio;
 	int disp_en_gpio;
 	int bklt_en_gpio;
+#ifdef VENDOR_EDIT
+/* liping-m@SWDP.MultiMedia, 2016/08/12  Add for LCD 1.8v*/
+	int ldo_1p8_gpio;
+#endif
 	int mode_gpio;
 	int bklt_ctrl;	/* backlight ctrl */
 	bool pwm_pmi;
@@ -461,6 +482,22 @@ struct mdss_dsi_ctrl_pdata {
 	struct mdss_hw *dsi_hw;
 	struct mdss_intf_recovery *recovery;
 	struct mdss_intf_recovery *mdp_callback;
+
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC */
+    struct dsi_panel_cmds skin_crc_cmds;
+    struct dsi_panel_cmds all_off_cmds;
+	struct dsi_panel_cmds lbr_cmds;
+#endif
+
+#ifdef VENDOR_EDIT
+//Shengjun.Gou@Multimedia.Driver.Stability, 2016/10/31,
+//add for 16027 cabc mode
+    struct dsi_panel_cmds cabc_close_cmds;
+    struct dsi_panel_cmds cabc_ui_mode_cmds;
+    struct dsi_panel_cmds cabc_image_mode_cmds;
+    struct dsi_panel_cmds cabc_video_mode_cmds;
+#endif /*VENDOR_EDIT*/
 
 	struct dsi_panel_cmds on_cmds;
 	struct dsi_panel_cmds post_dms_on_cmds;
