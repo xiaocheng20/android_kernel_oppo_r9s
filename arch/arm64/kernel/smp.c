@@ -148,8 +148,11 @@ asmlinkage void secondary_start_kernel(void)
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
 
 	set_my_cpu_offset(per_cpu_offset(smp_processor_id()));
-	pr_debug("CPU%u: Booted secondary processor\n", cpu);
 
+	#ifndef VENDOR_EDIT
+	/* yan.chen@swdp modify it for hypnus module */
+	pr_debug("CPU%u: Booted secondary processor\n", cpu);
+	#endif
 	/*
 	 * TTBR0 is only used for the identity mapping at this stage. Make it
 	 * point to zero page to avoid speculatively fetching new entries.
@@ -621,8 +624,12 @@ static void smp_send_all_cpu_backtrace(void)
 
 	pr_info("Backtrace for cpu %d (current):\n", this_cpu);
 	dump_stack();
-
+#ifndef VENDOR_EDIT	
+/* fanhui@PhoneSW.BSP, 2016/03/10, DeathHealer, record SIGSTOP sender */
 	pr_info("\nsending IPI to all other CPUs:\n");
+#else
+	pr_info("\nsending IPI to all other CPUs(0x%lx):\n", *cpumask_bits(&backtrace_mask));
+#endif
 	if (!cpus_empty(backtrace_mask))
 		smp_cross_call_common(&backtrace_mask, IPI_CPU_BACKTRACE);
 
