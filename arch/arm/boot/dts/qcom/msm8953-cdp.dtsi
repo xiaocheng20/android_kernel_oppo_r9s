@@ -103,8 +103,10 @@
 			debounce-interval = <15>;
 		};
 	};
-
-	hbtp {
+	
+	//#ifdef VENDOR_EDIT	
+	//Wanghao@phone.bsp.tp,del 2016/06/23 for close hbtp
+	/*hbtp {
 		compatible = "qcom,hbtp-input";
 		vcc_ana-supply = <&pm8953_l10>;
 		vcc_dig-supply = <&pm8953_l5>;
@@ -114,7 +116,8 @@
 		qcom,dig-load = <15000>;
 		qcom,dig-vtg-min = <1800000>;
 		qcom,dig-vtg-max = <1800000>;
-	};
+	};*/
+	//#endif /* VENDOR_EDIT */	
 };
 
 &tlmm {
@@ -195,9 +198,11 @@
 	qcom,platform-bklight-en-gpio = <&tlmm 59 0>;
 };
 
+//Shengjun.Gou@SWDP.MultiMedia, 2016/06/09,  Modify for 16017 LCD driver
 &labibb {
 	status = "ok";
-	qpnp,qpnp-labibb-mode = "lcd";
+	qpnp,qpnp-labibb-mode = "amoled";
+	qpnp,swire-control;
 };
 
 &dsi_truly_1080_vid {
