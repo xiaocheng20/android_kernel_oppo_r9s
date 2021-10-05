@@ -2100,7 +2100,6 @@ static void __journal_abort_soft (journal_t *journal, int errno)
 		journal->j_flags |= JBD2_REC_ERR;
 		write_unlock(&journal->j_state_lock);
 	}
-
 }
 
 /**
