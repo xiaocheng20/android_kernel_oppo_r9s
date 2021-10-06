@@ -808,6 +808,13 @@ config BOOTPARAM_HUNG_TASK_PANIC_VALUE
 	range 0 1
 	default 0 if !BOOTPARAM_HUNG_TASK_PANIC
 	default 1 if BOOTPARAM_HUNG_TASK_PANIC
+#ifdef VENDOR_EDIT
+#fanhui@PhonwSW.BSP, 2016/04/07, DeathHealer enable config
+config DEATH_HEALER
+	bool "Enable DeathHealer"
+	depends on DETECT_HUNG_TASK
+	default n
+#endif
 
 endmenu # "Debug lockups and hangs"
 
