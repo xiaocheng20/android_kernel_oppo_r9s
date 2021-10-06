@@ -290,6 +290,12 @@ extern int sysctl_tcp_use_userconfig;
 extern struct percpu_counter tcp_sockets_allocated;
 extern int tcp_memory_pressure;
 
+#ifdef VENDOR_EDIT
+//Ming.Liu@Connectivity.WiFi.Network.quality.FN7, 2016/10/09,
+//add for: [monitor tcp info]
+extern int sysctl_tcp_info_print;
+#endif /* VENDOR_EDIT */
+
 /*
  * The next routines deal with comparing 32 bit unsigned ints
  * and worry about wraparound (automatic with unsigned arithmetic).

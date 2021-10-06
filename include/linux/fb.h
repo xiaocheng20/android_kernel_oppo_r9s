@@ -631,6 +631,10 @@ extern struct fb_info *registered_fb[FB_MAX];
 extern int num_registered_fb;
 extern struct class *fb_class;
 
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.shanghai, 2015/11/09, export some symbol
+extern struct fb_info *get_fb_info(unsigned int idx);
+#endif /* VENDOR_EDIT */
 extern int lock_fb_info(struct fb_info *info);
 
 static inline void unlock_fb_info(struct fb_info *info)
