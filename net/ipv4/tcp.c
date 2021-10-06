@@ -310,6 +310,14 @@ EXPORT_SYMBOL(sysctl_tcp_delack_seg);
 int sysctl_tcp_use_userconfig __read_mostly;
 EXPORT_SYMBOL(sysctl_tcp_use_userconfig);
 
+#ifdef VENDOR_EDIT
+//Ming.Liu@Connectivity.WiFi.Network.quality.FN7, 2016/10/09,
+//add for: [monitor tcp info]
+int sysctl_tcp_info_print __read_mostly = -1;
+EXPORT_SYMBOL(sysctl_tcp_info_print);
+#endif /* VENDOR_EDIT */
+
+
 /*
  * Current number of TCP sockets.
  */
@@ -785,6 +793,12 @@ ssize_t tcp_splice_read(struct socket *sock, loff_t *ppos,
 				ret = -EAGAIN;
 				break;
 			}
+			/* if __tcp_splice_read() got nothing while we have
+			 * an skb in receive queue, we do not want to loop.
+			 * This might happen with URG data.
+			 */
+			if (!skb_queue_empty(&sk->sk_receive_queue))
+				break;
 			sk_wait_data(sk, &timeo);
 			if (signal_pending(current)) {
 				ret = sock_intr_errno(timeo);
