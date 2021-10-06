@@ -371,6 +371,70 @@ DEFINE_EVENT(clock, clock_set_rate_complete,
 	TP_ARGS(name, state, cpu_id)
 );
 
+//#ifdef VENDOR_EDIT //yixue.ge@bsp.drv modify b11
+TRACE_EVENT(clock_cpu_set_rate,
+	TP_PROTO(unsigned int call_count, const char *name, unsigned int prev_rate,
+	       	 unsigned int new_rate, const char *name1, unsigned int cur_rate1,
+	         const char *name2, unsigned int cur_rate2),
+
+	TP_ARGS(call_count, name, prev_rate, new_rate, name1, cur_rate1, name2, cur_rate2),
+
+	TP_STRUCT__entry(
+		__field(        u64,            call_count          )
+		__string(       name,           name            )
+		__field(        u64,            prev_rate           )
+		__field(        u64,            new_rate          )
+                __string(       name1,           name1            )
+                __field(        u64,            cur_rate1           )
+                 __string(       name2,           name2            )
+                 __field(        u64,            cur_rate2           )
+	),
+
+	TP_fast_assign(
+		 __entry->call_count = call_count;		
+		__assign_str(name, name);
+		__entry->prev_rate = prev_rate;
+		__entry->new_rate = new_rate;
+                __assign_str(name1, name1);
+                __entry->cur_rate1 = cur_rate1;
+                  __assign_str(name2, name2);
+                __entry->cur_rate2 = cur_rate2;
+  		
+	),
+
+        TP_printk("call_count=%lu, %s [%lu -> %lu] %s [%lu] %s [%lu]", (unsigned long)__entry->call_count, 
+			__get_str(name),
+			(unsigned long)__entry->prev_rate, 
+			(unsigned long)__entry->new_rate,
+		         __get_str(name1),
+	                (unsigned long)__entry->cur_rate1,
+			 __get_str(name2),
+		       	(unsigned long)__entry->cur_rate2)	
+);
+
+TRACE_EVENT(clock_cpu_log_return_code,
+
+	TP_PROTO(unsigned int call_count, const char *name, unsigned int return_code),
+
+	TP_ARGS(call_count, name, return_code),
+
+	TP_STRUCT__entry(
+		__field(        u64,    call_count     )
+		__string(	name,	name	)
+		__field(	u64,	return_code	)
+	),
+
+	TP_fast_assign(
+		__entry->call_count = call_count;		
+		__assign_str(name, name);
+	        __entry->return_code = return_code;
+        ),
+
+        TP_printk("call_count=%lu, %s return code=%lu",(unsigned long)__entry->call_count,  __get_str(name),
+                        (unsigned long)__entry->return_code)
+);
+//#endif
+
 TRACE_EVENT(clock_set_parent,
 
 	TP_PROTO(const char *name, const char *parent_name),

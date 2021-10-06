@@ -195,6 +195,13 @@ struct sock_common {
 	struct net	 	*skc_net;
 #endif
 
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.OppoFeature.TrafficMonitor, 2016/10/28,
+//add for count TCP_TIME_WAIT state to corresponding process
+	uid_t skc_uid;
+	char skc_cmdline[TASK_COMM_LEN];
+#endif /* VENDOR_EDIT */
+
 #if IS_ENABLED(CONFIG_IPV6)
 	struct in6_addr		skc_v6_daddr;
 	struct in6_addr		skc_v6_rcv_saddr;
@@ -329,6 +336,12 @@ struct sock {
 #define sk_net			__sk_common.skc_net
 #define sk_v6_daddr		__sk_common.skc_v6_daddr
 #define sk_v6_rcv_saddr	__sk_common.skc_v6_rcv_saddr
+#ifdef VENDOR_EDIT
+//Jiemin.Zhu@Swdp.Android.OppoFeature.TrafficMonitor, 2016/10/28,
+//add for count TCP_TIME_WAIT state to corresponding process
+#define sk_uid			__sk_common.skc_uid
+#define sk_cmdline			__sk_common.skc_cmdline
+#endif /* VENDOR_EDIT */
 
 	socket_lock_t		sk_lock;
 	struct sk_buff_head	sk_receive_queue;

@@ -404,7 +404,9 @@ static inline int dst_neigh_output(struct dst_entry *dst, struct neighbour *n,
 				   struct sk_buff *skb)
 {
 	const struct hh_cache *hh;
-
+	#ifndef VENDOR_EDIT
+	//Yuan.Huang@Connectivity.WiFi.Network.internet, 2016/07/05, 
+	//Remove for [N6] surf the internet too slowly of Changsha problem
 	if (dst->pending_confirm) {
 		unsigned long now = jiffies;
 
@@ -413,6 +415,7 @@ static inline int dst_neigh_output(struct dst_entry *dst, struct neighbour *n,
 		if (n->confirmed != now)
 			n->confirmed = now;
 	}
+	#endif /* VENDOR_EDIT */
 
 	hh = &n->hh;
 	if ((n->nud_state & NUD_CONNECTED) && hh->hh_len)

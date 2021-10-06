@@ -51,6 +51,15 @@
 #define SIGRTMAX	_NSIG
 #endif
 
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend signal
+#ifdef CONFIG_VM_STATE
+#define SIGPROCSUSPEND 58
+#define SIGPROCRESUME 59
+#define SIGVMSUSPEND 62
+#define SIGVMRESUME 63
+#endif
+#endif
 /*
  * SA_FLAGS values:
  *

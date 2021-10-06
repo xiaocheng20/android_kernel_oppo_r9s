@@ -26,6 +26,10 @@
 #include <linux/rcupdate.h>
 #include <linux/jump_label.h>
 #include <uapi/linux/net.h>
+#ifdef VENDOR_EDIT
+//Geliang.Tan@Swdp.Android.OppoFeature.TrafficMonitor, 2015/08/01, Add for tag pid
+#include <linux/sched.h>
+#endif /* VENDOR_EDIT */
 
 struct poll_table_struct;
 struct pipe_inode_info;
