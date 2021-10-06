@@ -4791,13 +4791,15 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 		max_blocks = 0;
 	else
 		max_blocks -= lblk;
-
+	
+#ifndef VENDOR_EDIT
+//Zhilong.zhang@Phone.Bsp.Driver, 2016/06/20, added kernel patch: allocate entire range in zero range	
 	flags = EXT4_GET_BLOCKS_CREATE_UNWRIT_EXT |
 		EXT4_GET_BLOCKS_CONVERT_UNWRITTEN |
 		EXT4_EX_NOCACHE;
 	if (mode & FALLOC_FL_KEEP_SIZE)
 		flags |= EXT4_GET_BLOCKS_KEEP_SIZE;
-
+#endif /*VENDOR_EDIT*/
 	mutex_lock(&inode->i_mutex);
 
 	/*
@@ -4814,15 +4816,43 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 		ret = inode_newsize_ok(inode, new_size);
 		if (ret)
 			goto out_mutex;
+#ifndef VENDOR_EDIT
+//Zhilong.zhang@Phone.Bsp.Driver, 2016/06/20, added kernel patch: allocate entire range in zero range			
 		/*
 		 * If we have a partial block after EOF we have to allocate
 		 * the entire block.
 		 */
 		if (partial_end)
 			max_blocks += 1;
+#endif /*VENDOR_EDIT*/		
 	}
 
+#ifdef VENDOR_EDIT
+//Zhilong.zhang@Phone.Bsp.Driver, 2016/08/12, added kernel patch: allocate entire range in zero range
+	flags = EXT4_GET_BLOCKS_CREATE_UNWRIT_EXT;
+	if (mode & FALLOC_FL_KEEP_SIZE)
+		flags |= EXT4_GET_BLOCKS_KEEP_SIZE;
+
+	/* Preallocate the range including the unaligned edges */
+	if (partial_begin || partial_end) {
+		ret = ext4_alloc_file_blocks(file,
+				round_down(offset, 1 << blkbits) >> blkbits,
+				(round_up((offset + len), 1 << blkbits) -
+				 round_down(offset, 1 << blkbits)) >> blkbits,
+				new_size, flags, mode);
+		if (ret)
+			goto out_mutex;
+
+	}
+
+	/* Zero range excluding the unaligned edges */
+#endif /*VENDOR_EDIT*/	
 	if (max_blocks > 0) {
+#ifdef VENDOR_EDIT
+//Zhilong.zhang@Phone.Bsp.Driver, 2016/08/12, added kernel patch: allocate entire range in zero range	
+		flags |= (EXT4_GET_BLOCKS_CONVERT_UNWRITTEN |
+			  EXT4_EX_NOCACHE);
+#endif /*VENDOR_EDIT*/
 
 		/* Now release the pages and zero block aligned part of pages*/
 		truncate_pagecache_range(inode, start, end - 1);
@@ -4836,6 +4866,8 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 					     flags, mode);
 		if (ret)
 			goto out_dio;
+#ifndef VENDOR_EDIT
+//Zhilong.zhang@Phone.Bsp.Driver, 2016/06/20, added kernel patch: fix loss of delalloc extent info in ext4_zero_range()		
 		/*
 		 * Remove entire range from the extent status tree.
 		 *
@@ -4849,6 +4881,7 @@ static long ext4_zero_range(struct file *file, loff_t offset,
 		ret = ext4_es_remove_extent(inode, 0, EXT_MAX_BLOCKS);
 		if (ret)
 			goto out_dio;
+#endif /*VENDOR_EDIT*/		
 	}
 	if (!partial_begin && !partial_end)
 		goto out_dio;
