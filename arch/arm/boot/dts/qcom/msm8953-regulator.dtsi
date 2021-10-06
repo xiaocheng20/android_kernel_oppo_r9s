@@ -221,6 +221,9 @@
 			regulator-max-microvolt = <2850000>;
 			qcom,init-voltage = <2850000>;
 			status = "okay";
+//#ifdef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/7/14 for rf/sensor always on 			
+			regulator-always-on;
+//#endif /*VENDOR_EDIT*/			
 		};
 	};
 
@@ -788,7 +791,6 @@
 
 		mem-acc-supply = <&gfx_mem_acc>;
 		qcom,mem-acc-corner-map = <1 1 1 2 2 2 2>;
-		qcom,ldo-init-voltage-adjustment = <35000 25000 0>;
 	};
 
 	eldo2_8953: eldo2 {

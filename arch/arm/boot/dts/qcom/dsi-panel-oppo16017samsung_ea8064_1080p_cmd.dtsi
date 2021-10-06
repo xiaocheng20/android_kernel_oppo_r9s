@@ -31,7 +31,7 @@
 		qcom,mdss-dsi-panel-height = <1920>;
 		qcom,mdss-dsi-h-front-porch = <118>;
 		qcom,mdss-dsi-h-back-porch = <70>;
-		qcom,mdss-dsi-h-pulse-width = <12>;
+		qcom,mdss-dsi-h-pulse-width = <16>;
 		qcom,mdss-dsi-h-sync-skew = <0>;
 		qcom,mdss-dsi-v-back-porch = <4>;
 		qcom,mdss-dsi-v-front-porch = <20>;
@@ -44,16 +44,65 @@
 		qcom,mdss-dsi-color-order = "rgb_swap_rgb";
 		qcom,mdss-dsi-underflow-color = <0xff>;
 		qcom,mdss-dsi-border-color = <0>;
-		qcom,mdss-dsi-on-command = [05 01 00 00 16 00 02 11 00
+		qcom,mdss-dsi-on-command = [05 01 00 00 78 00 02 11 00
+		39 01 00 00 01 00 03 F0 5A 5A
+		39 01 00 00 01 00 02 C3 A0
+		39 01 00 00 01 00 02 B0 01
+		39 01 00 00 01 00 02 C3 49
+		39 01 00 00 01 00 02 B0 0D
+		39 01 00 00 01 00 02 C3 14
+		39 01 00 00 01 00 02 B0 0E
+		39 01 00 00 01 00 02 C3 25
+		39 01 00 00 01 00 02 B0 18
+		39 01 00 00 01 00 02 C3 00
+		39 01 00 00 01 00 02 B0 19
+		39 01 00 00 01 00 16 C3 DE 00 00 16 FF 00 00 00 FF 00 FF FF FF 00 FF F2 FB 04 FF FF FF
+		39 01 00 00 01 00 03 F0 A5 A5
 		15 01 00 00 01 00 02 35 00
 		15 01 00 00 01 00 02 53 20
-		15 01 00 00 01 00 02 51 00
-		15 01 00 00 52 00 02 57 40
+		15 01 00 00 0A 00 02 51 00
 		05 01 00 00 01 00 02 29 00];
 		qcom,mdss-dsi-off-command = [05 01 00 00 28 00 02 28 00
 					05 01 00 00 78 00 02 10 00];
 		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
+		/* Xinqin.Yang@Camera, 2016-07-27, add for camera/gallery use skin color and CRC begin */
+		qcom,mdss-dsi-skin-crc-command = [
+		39 01 00 00 01 00 03 F0 5A 5A
+		39 01 00 00 01 00 02 C3 A0
+		39 01 00 00 01 00 02 B0 01
+		39 01 00 00 01 00 02 C3 49
+		39 01 00 00 01 00 02 B0 0D
+		39 01 00 00 01 00 02 C3 14
+		39 01 00 00 01 00 02 B0 0E
+		39 01 00 00 01 00 02 C3 25
+		39 01 00 00 01 00 02 B0 18
+		39 01 00 00 01 00 02 C3 00
+		39 01 00 00 01 00 02 B0 19
+		39 01 00 00 01 00 16 C3 DE 00 00 16 FF 00 00 00 FF 00 FF FF FF 00 FF F2 FB 04 FF FF FF
+		39 01 00 00 01 00 03 F0 A5 A5];
+		qcom,mdss-dsi-lbr-command = [
+		39 01 00 00 01 00 03 F0 5A 5A
+		39 01 00 00 01 00 02 B0 02
+		39 01 00 00 01 00 02 C3 80
+		39 01 00 00 01 00 02 B0 04
+		39 01 00 00 01 00 02 C3 3F
+		39 01 00 00 01 00 03 F0 A5 A5];
+		qcom,mdss-dsi-all-off-command = [
+		39 01 00 00 01 00 03 F0 5A 5A
+		39 01 00 00 01 00 02 C3 A0
+		39 01 00 00 01 00 02 B0 01
+		39 01 00 00 01 00 02 C3 49
+		39 01 00 00 01 00 02 B0 0D
+		39 01 00 00 01 00 02 C3 14
+		39 01 00 00 01 00 02 B0 0E
+		39 01 00 00 01 00 02 C3 25
+		39 01 00 00 01 00 02 B0 18
+		39 01 00 00 01 00 02 C3 00
+		39 01 00 00 01 00 02 B0 19
+		39 01 00 00 01 00 16 C3 DE 00 00 16 FF 00 00 00 FF 00 FF FF FF 00 FF F2 FB 04 FF FF FF
+		39 01 00 00 01 00 03 F0 A5 A5];
+		/* Xinqin.Yang@Camera, 2016-07-27, add end */
 		qcom,mdss-dsi-h-sync-pulse = <1>;
 		qcom,mdss-dsi-traffic-mode = "burst_mode";
 		qcom,mdss-dsi-lane-map = "lane_map_0123";
@@ -83,13 +132,14 @@
 		/*qcom,mdss-dsi-panel-inverted;*/
 		qcom,mdss-dsi-rx-eot-ignore;
 		qcom,mdss-dsi-tx-eot-append;
-		/*qcom,esd-check-enabled;*/
+		qcom,esd-check-enabled;
+		qcom,mdss-dsi-panel-status-read-length = <1>;
 		qcom,mdss-dsi-panel-status-check-mode="reg_read";
 		qcom,mdss-dsi-panel-status-command = [06 01 00 01 05 00 02 0A 08];
 		qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
 		qcom,mdss-dsi-panel-status-value = <0x9C>;
-		qcom,mdss-pan-physical-width-dimension = <74>;
-		qcom,mdss-pan-physical-height-dimension = <132>;
+		qcom,mdss-pan-physical-width-dimension = <68>;
+		qcom,mdss-pan-physical-height-dimension = <122>;
 		qcom,mdss-mdp-transfer-time-us = <12000>;
 	};
 };

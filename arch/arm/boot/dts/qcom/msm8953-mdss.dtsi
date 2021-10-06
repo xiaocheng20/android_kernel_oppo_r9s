@@ -303,10 +303,11 @@
 
 			qcom,timing-db-mode;
 			qcom,mdss-mdp = <&mdss_mdp>;
-			vdd-supply = <&pm8953_l17>;
-			vddio-supply = <&pm8953_l6>;
-			lab-supply = <&lab_regulator>;
-			ibb-supply = <&ibb_regulator>;
+			//Shengjun.Gou@SWDP.MultiMedia, 2016/07/19,  Modify for 16017 MDSS power supply
+			//vdd-supply = <&pm8953_l17>;
+			//vddio-supply = <&pm8953_l6>;
+			//lab-supply = <&lab_regulator>;
+			//ibb-supply = <&ibb_regulator>;
 
 			clocks = <&clock_gcc_mdss clk_gcc_mdss_byte0_clk>,
 				<&clock_gcc_mdss clk_gcc_mdss_pclk0_clk>,

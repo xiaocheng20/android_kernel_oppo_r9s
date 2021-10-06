@@ -5,11 +5,11 @@ dts-dirs += cavium
 #dts-dirs += qcom
 #else
 #ifeq ($(OPPO_TARGET_DEVICE),MSM_16017)
-dts-dirs += 16017
+dts-dirs += qcom
 #else ifeq ($(OPPO_TARGET_DEVICE),MSM_16027)
-dts-dirs += 16027
+#dts-dirs += 16027
 #else
-dts-dirs += 16061
+#dts-dirs += 16061
 #endif
 #endif //VENDOR_EDIT
 
