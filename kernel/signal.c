@@ -51,6 +51,10 @@
 
 static struct kmem_cache *sigqueue_cachep;
 
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+int print_system_murder __read_mostly;
+#endif
 int print_fatal_signals __read_mostly;
 
 static void __user *sig_handler(struct task_struct *t, int sig)
@@ -748,7 +752,13 @@ static int kill_ok_by_cred(struct task_struct *t)
 	if (uid_eq(cred->euid, tcred->suid) ||
 	    uid_eq(cred->euid, tcred->uid)  ||
 	    uid_eq(cred->uid,  tcred->suid) ||
+	    #ifdef VENDOR_EDIT
+	    // liangkun@Swdp.shanghai 2015/11/18, give permission to system to send specific signal
+	    uid_eq(cred->uid,  tcred->uid)  ||
+	    cred->uid.val == 1000)
+	    #else
 	    uid_eq(cred->uid,  tcred->uid))
+	    #endif
 		return 1;
 
 	if (ns_capable(tcred->user_ns, CAP_KILL))
@@ -1019,6 +1029,34 @@ static inline void userns_fixup_signal_uid(struct siginfo *info, struct task_str
 	return;
 }
 #endif
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+static bool is_zygote_process(struct task_struct *t)
+{
+	const struct cred *tcred = __task_cred(t);
+
+	struct task_struct * first_child = NULL;
+	if(t->children.next && t->children.next != (struct list_head*)&t->children.next)
+		first_child = container_of(t->children.next, struct task_struct, sibling);
+	if(!strcmp(t->comm, "main") && (tcred->uid.val == 0) && (t->parent != 0 && !strcmp(t->parent->comm,"init"))  )
+		return true;
+	else
+		return false;
+	return false;
+}
+
+static int __init setup_print_system_murder(char *str)
+{
+		get_option(&str, &print_system_murder);
+		return 1;
+}
+__setup("print_system_murder=", setup_print_system_murder);
+#endif
+
+#ifdef VENDOR_EDIT
+/*fanhui@PhoneSW.BSP, 2016-06-21, DeathHealer, record the SIGSTOP sender*/
+extern char last_stopper_comm[];
+#endif
 
 static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 			int group, int from_ancestor_ns)
@@ -1031,10 +1069,50 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 	assert_spin_locked(&t->sighand->siglock);
 
 	result = TRACE_SIGNAL_IGNORED;
+
+#ifdef VENDOR_EDIT
+/* OPPO 2015-11-04 fangpan@oppo.com modify for the sender who kill system_server*/
+	if(1) {
+		/*add the SIGKILL print log for some debug*/
+		if((sig == SIGHUP || sig == 33 || sig == SIGKILL || sig == SIGSTOP || sig == SIGABRT || sig == SIGTERM || sig == SIGCONT) && (!strcmp(t->comm, "system_server") || is_zygote_process(t))) {
+			//#ifdef VENDOR_EDIT
+			printk("Some other process %d:%s want to kill sig:%d %d:%s\n", current->pid, current->comm,sig, t->pid, t->comm);
+			/* OPPO 2015-12-11 fangpan@Swdp.shanghai remove the abort operation for the send process*/
+			//#endif
+		}
+	}
+#endif
+#ifdef VENDOR_EDIT
+	/* OPPO 2016-10-12 fangpan@oppo.com modify for the sender who kill 19 to com.android.bluetooth*/
+	/*add the SIGKILL print log for some BUG 862330, com.android.bluetooth become freezing state*/
+	if((sig == 18 || sig == 19) && (!strcmp(t->comm, "com.ted.number") || !strcmp(t->comm, "droid.bluetooth"))) {
+		printk("Some other process %d:%s want to kill sig:%d %d:%s\n", current->pid, current->comm,sig, t->pid, t->comm);
+	}
+#endif
+
+#if defined(VENDOR_EDIT) && defined(CONFIG_DEATH_HEALER)
+/*fanhui@PhoneSW.BSP, 2016-06-21, DeathHealer, record the SIGSTOP sender*/
+	if (sig == SIGSTOP && (!strncmp(t->comm,"main", TASK_COMM_LEN) ||
+		!strncmp(t->comm,"system_server", TASK_COMM_LEN) || !strncmp(t->comm,"surfaceflinger", TASK_COMM_LEN)))
+		snprintf(last_stopper_comm, 64, "%s[%d]", current->comm, current->pid);
+#endif
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+	/*change the vmstate only for the group_leader*/
+	if(t && t->group_leader) {
+		if (sig == SIGVMSUSPEND) {
+			atomic_set(&t->group_leader->vmstate, 1);
+		} else if (sig == SIGPROCSUSPEND) {
+			atomic_set(&t->group_leader->vmstate, 2);
+		}
+	}
+#endif
+#endif
+
 	if (!prepare_signal(sig, t,
 			from_ancestor_ns || (info == SEND_SIG_FORCED)))
 		goto ret;
-
 	pending = group ? &t->signal->shared_pending : &t->pending;
 	/*
 	 * Short-circuit ignored signals and support queuing
@@ -1288,7 +1366,10 @@ struct sighand_struct *__lock_task_sighand(struct task_struct *tsk,
 
 	return sighand;
 }
-
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2015/11/26, add interface for resmon module
+EXPORT_SYMBOL(__lock_task_sighand);
+#endif
 /*
  * send signal info to all the members of a group
  */
@@ -2641,8 +2722,55 @@ COMPAT_SYSCALL_DEFINE4(rt_sigprocmask, int, how, compat_sigset_t __user *, nset,
 	}
 	return 0;
 #else
-	return sys_rt_sigprocmask(how, (sigset_t __user *)nset,
-				  (sigset_t __user *)oset, sigsetsize);
+#ifdef VENDOR_EDIT
+	//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+    sigset_t old_set, new_set;
+    sigset_t usr_high_sig;
+	int error;
+
+	/* XXX: Don't preclude handling different sized sigset_t's.  */
+	if (sigsetsize != sizeof(sigset_t))
+		return -EINVAL;
+
+	old_set = current->blocked;
+
+	if (nset) {
+		if (copy_from_user(&new_set, nset, sizeof(sigset_t)))
+			return -EFAULT;
+
+        /*As in the ART, it add the SIGVMSUSPEND,SIGVMRESUME,SIGPROCSUSPEND,
+         * SIGPROCRESUME. need consider this for some 32bits compatible app*/
+        switch (_NSIG_WORDS) {
+            case 2:
+                if (old_set.sig[1] && new_set.sig[1]==0)
+                    new_set.sig[1] |= old_set.sig[1];
+                break;
+            case 1:
+                if ((old_set.sig[0] >> SIGRTMIN) && ((new_set.sig[0] >> SIGRTMIN)==0)) {
+                    usr_high_sig = old_set;
+                    sigdelsetmask(&usr_high_sig, (unsigned long)0xffffffff);
+                    sigaddsetmask(&new_set, (unsigned long)usr_high_sig.sig[0]);
+                }
+                break;
+            default:
+                break;
+        }
+		sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+
+		error = sigprocmask(how, &new_set, NULL);
+		if (error)
+			return error;
+	}
+
+	if (oset) {
+		if (copy_to_user(oset, &old_set, sizeof(sigset_t)))
+			return -EFAULT;
+	}
+
+	return 0;
+#endif
+#endif
 #endif
 }
 #endif
@@ -2793,6 +2921,12 @@ int do_sigtimedwait(const sigset_t *which, siginfo_t *info,
 	long timeout = MAX_SCHEDULE_TIMEOUT;
 	sigset_t mask = *which;
 	int sig;
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+	struct task_struct *t = tsk;
+#endif
+#endif
 
 	if (ts) {
 		if (!timespec_valid(ts))
@@ -2835,6 +2969,31 @@ int do_sigtimedwait(const sigset_t *which, siginfo_t *info,
 	}
 	spin_unlock_irq(&tsk->sighand->siglock);
 
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/03/31 add the vm suspend state
+#ifdef CONFIG_VM_STATE
+	/*add the tasklist_lock to protect the vmstat change*/
+	write_lock_irq(&tasklist_lock);
+	if (sig == SIGVMSUSPEND) {
+		atomic_set(&tsk->group_leader->vmstate, 1);
+		while_each_thread(tsk->group_leader, t)
+			atomic_set(&t->vmstate, 1);
+	} else if  (sig == SIGVMRESUME) {
+		atomic_set(&tsk->group_leader->vmstate, 0);
+		while_each_thread(tsk->group_leader, t)
+			atomic_set(&t->vmstate, 0);
+	} else if (sig == SIGPROCSUSPEND) {
+		atomic_set(&tsk->group_leader->vmstate, 2);
+		while_each_thread(tsk->group_leader, t)
+			atomic_set(&t->vmstate, 2);
+	} else if  (sig == SIGPROCRESUME) {
+		atomic_set(&tsk->group_leader->vmstate, 0);
+		while_each_thread(tsk->group_leader, t)
+			atomic_set(&t->vmstate, 0);
+	}
+	write_unlock_irq(&tasklist_lock);
+#endif
+#endif
 	if (sig)
 		return sig;
 	return timeout ? -EINTR : -EAGAIN;

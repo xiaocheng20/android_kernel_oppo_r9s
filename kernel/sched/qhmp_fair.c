@@ -2672,6 +2672,10 @@ int sched_set_cpu_mostly_idle_load(int cpu, int mostly_idle_pct)
 
 	return 0;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_set_cpu_mostly_idle_load);
+#endif
 
 int sched_set_cpu_mostly_idle_freq(int cpu, unsigned int mostly_idle_freq)
 {
@@ -2684,6 +2688,10 @@ int sched_set_cpu_mostly_idle_freq(int cpu, unsigned int mostly_idle_freq)
 
 	return 0;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_set_cpu_mostly_idle_freq);
+#endif
 
 unsigned int sched_get_cpu_mostly_idle_freq(int cpu)
 {
@@ -2691,6 +2699,10 @@ unsigned int sched_get_cpu_mostly_idle_freq(int cpu)
 
 	return rq->mostly_idle_freq;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_get_cpu_mostly_idle_freq);
+#endif
 
 int sched_get_cpu_mostly_idle_load(int cpu)
 {
@@ -2701,6 +2713,10 @@ int sched_get_cpu_mostly_idle_load(int cpu)
 
 	return mostly_idle_pct;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_get_cpu_mostly_idle_load);
+#endif
 
 int sched_set_cpu_mostly_idle_nr_run(int cpu, int nr_run)
 {
@@ -2710,6 +2726,10 @@ int sched_set_cpu_mostly_idle_nr_run(int cpu, int nr_run)
 
 	return 0;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_set_cpu_mostly_idle_nr_run);
+#endif
 
 int sched_get_cpu_mostly_idle_nr_run(int cpu)
 {
@@ -2717,6 +2737,10 @@ int sched_get_cpu_mostly_idle_nr_run(int cpu)
 
 	return rq->mostly_idle_nr_run;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_get_cpu_mostly_idle_nr_run);
+#endif
 
 #ifdef CONFIG_CGROUP_SCHED
 
@@ -2843,6 +2867,10 @@ int sched_boost(void)
 {
 	return boost_refcount > 0;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_boost);
+#endif
 
 int sched_set_boost(int enable)
 {
@@ -2876,6 +2904,10 @@ int sched_set_boost(int enable)
 
 	return ret;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_set_boost);
+#endif
 
 int sched_boost_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp,

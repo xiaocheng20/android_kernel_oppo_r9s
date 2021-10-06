@@ -285,6 +285,23 @@ static bool has_stopped_jobs(struct pid *pgrp)
 	return false;
 }
 
+#ifdef VENDOR_EDIT
+//Shu.Liu@Swdp.Android.Stability.Crash, 2014/01/20, add for not kill zygote
+static bool oppo_is_android_core_group(struct pid *pgrp)
+{
+	struct task_struct *p;
+
+	do_each_pid_task(pgrp, PIDTYPE_PGID, p) {
+		if (( !strcmp(p->comm, "zygote") ) || ( !strcmp(p->comm, "main")) ) {
+			printk("oppo_is_android_core_group: find zygote will be hungup, ignore it \n");
+			return true;
+		}
+	} while_each_pid_task(pgrp, PIDTYPE_PGID, p);
+
+	return false;
+}
+#endif /* VENDOR_EDIT */
+
 /*
  * Check to see if any process groups have become orphaned as
  * a result of our exiting, and if they have any stopped jobs,
@@ -311,6 +328,13 @@ kill_orphaned_pgrp(struct task_struct *tsk, struct task_struct *parent)
 	    task_session(parent) == task_session(tsk) &&
 	    will_become_orphaned_pgrp(pgrp, ignored_task) &&
 	    has_stopped_jobs(pgrp)) {
+#ifdef VENDOR_EDIT
+//Shu.Liu@Swdp.Android.Stability.Crash, 2014/01/10, add for clean backstage
+		if (oppo_is_android_core_group(pgrp)) {
+			printk("kill_orphaned_pgrp: find android core process will be hungup, ignored it, only hungup itself:%s:%d , current=%d \n",tsk->comm,tsk->pid,current->pid);
+			return;
+		}
+#endif /* VENDOR_EDIT */
 		__kill_pgrp_info(SIGHUP, SEND_SIG_PRIV, pgrp);
 		__kill_pgrp_info(SIGCONT, SEND_SIG_PRIV, pgrp);
 	}
@@ -674,11 +698,54 @@ static void check_stack_usage(void)
 static inline void check_stack_usage(void) {}
 #endif
 
+//#ifdef VENDOR_EDIT
+//Haoran.Zhang@Swdp.Android.Stability.Crash,2016/05/24, add for debug critical svc crash
+
+static bool is_zygote_process(struct task_struct *t)
+{
+	const struct cred *tcred = __task_cred(t);
+
+	struct task_struct * first_child = NULL;
+	if(t->children.next && t->children.next != (struct list_head*)&t->children.next)
+		first_child = container_of(t->children.next, struct task_struct, sibling);
+	if(!strcmp(t->comm, "main") && (tcred->uid.val == 0) && (t->parent != 0 && !strcmp(t->parent->comm,"init"))  )
+		return true;
+	else
+		return false;
+	return false;
+}
+
+static bool is_critial_process(struct task_struct *t) {
+    if(t->group_leader && (!strcmp(t->group_leader->comm, "system_server") || is_zygote_process(t) || !strcmp(t->group_leader->comm, "surfaceflinger") || !strcmp(t->group_leader->comm, "servicemanager"))) 
+    {
+       if (t->pid == t->tgid)
+       {
+          return true;
+       }
+       else
+       {
+          return false;
+       }
+    } else {
+        return false;
+    }
+
+}
+//#endif /*VENDOR_EDIT*/
 void do_exit(long code)
 {
+
 	struct task_struct *tsk = current;
 	int group_dead;
 	TASKS_RCU(int tasks_rcu_i);
+//#ifdef VENDOR_EDIT
+//Haoran.Zhang@PSW.Android.Stability.Crash,2016/05/24, Add for debug critical svc crash
+	if (is_critial_process(tsk)) {
+		dump_stack();
+		printk("critical svc %d:%s exit with %ld !\n", tsk->pid, tsk->comm,code);
+	}
+//#endif /*VENDOR_EDIT*/
+
 
 	profile_task_exit(tsk);
 

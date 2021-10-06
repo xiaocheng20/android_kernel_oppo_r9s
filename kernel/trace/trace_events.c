@@ -531,7 +531,7 @@ static int __ftrace_set_clr_event(struct trace_array *tr, const char *match,
 	return ret;
 }
 
-static int ftrace_set_clr_event(struct trace_array *tr, char *buf, int set)
+int ftrace_set_clr_event(struct trace_array *tr, char *buf, int set)
 {
 	char *event = NULL, *sub = NULL, *match;
 
@@ -561,6 +561,10 @@ static int ftrace_set_clr_event(struct trace_array *tr, char *buf, int set)
 
 	return __ftrace_set_clr_event(tr, match, sub, event, set);
 }
+#ifdef VENDOR_EDIT
+//fangpan@Swdp.shanghai, 2016/06/30, export the ftrace interface
+EXPORT_SYMBOL(ftrace_set_clr_event);
+#endif
 
 /**
  * trace_set_clr_event - enable or disable an event
