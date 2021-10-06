@@ -681,6 +681,13 @@ static char * const migratetype_names[MIGRATE_TYPES] = {
 #ifdef CONFIG_CMA
 	"CMA",
 #endif
+#ifdef VENDOR_EDIT
+/* Hui.Fan@PSW.BSP.Kernel.MM, 2017-8-21
+ * Add a migrate type to manage special page alloc/free
+ */
+	"OPPO0",
+	"OPPO2",
+#endif /* VENDOR_EDIT */
 	"Reserve",
 #ifdef CONFIG_MEMORY_ISOLATION
 	"Isolate",
@@ -796,6 +803,13 @@ const char * const vmstat_text[] = {
 	"workingset_nodereclaim",
 	"nr_anon_transparent_hugepages",
 	"nr_free_cma",
+	#ifdef VENDOR_EDIT
+	/* Hui.Fan@PSW.BSP.Kernel.MM, 2017-8-21
+	 * Account free pages for MIGRATE_OPPO
+	 */
+	"nr_free_oppo0",
+	"nr_free_oppo2",
+	#endif /* VENDOR_EDIT */
 	"nr_swapcache",
 
 	/* enum writeback_stat_item counters */
