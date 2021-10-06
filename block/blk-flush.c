@@ -112,6 +112,7 @@
 
 #include "blk.h"
 #include "blk-mq.h"
+#include "blk-mq-tag.h"
 
 /* FLUSH/FUA sequences */
 enum {
@@ -195,10 +196,22 @@ static bool blk_flush_queue_rq(struct request *rq, bool add_front)
 		blk_mq_kick_requeue_list(q);
 		return false;
 	} else {
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.Performance, 2018-04-28, add foreground task io opt*/
+		if (add_front) {
+			list_add(&rq->queuelist, &rq->q->queue_head);
+			queue_throtl_add_request(rq->q, rq, true);
+		}
+		else {
+			list_add_tail(&rq->queuelist, &rq->q->queue_head);
+			queue_throtl_add_request(rq->q, rq, false);
+		}
+#else
 		if (add_front)
 			list_add(&rq->queuelist, &rq->q->queue_head);
 		else
 			list_add_tail(&rq->queuelist, &rq->q->queue_head);
+#endif /*VENDOR_EDIT*/
 		return true;
 	}
 }
@@ -283,7 +296,12 @@ static void flush_end_io(struct request *flush_rq, int error)
 	struct blk_flush_queue *fq = blk_get_flush_queue(q, flush_rq->mq_ctx);
 
 	if (q->mq_ops) {
+		struct blk_mq_hw_ctx *hctx;
+
+		/* release the tag's ownership to the req cloned from */
 		spin_lock_irqsave(&fq->mq_flush_lock, flags);
+		hctx = q->mq_ops->map_queue(q, flush_rq->mq_ctx->cpu);
+		blk_mq_tag_set_rq(hctx, flush_rq->tag, fq->orig_rq);
 		flush_rq->tag = -1;
 	}
 
@@ -366,11 +384,18 @@ static bool blk_kick_flush(struct request_queue *q, struct blk_flush_queue *fq)
 
 	/*
 	 * Borrow tag from the first request since they can't
-	 * be in flight at the same time.
+	 * be in flight at the same time. And acquire the tag's
+	 * ownership for flush req.
 	 */
 	if (q->mq_ops) {
+		struct blk_mq_hw_ctx *hctx;
+
 		flush_rq->mq_ctx = first_rq->mq_ctx;
 		flush_rq->tag = first_rq->tag;
+		fq->orig_rq = first_rq;
+
+		hctx = q->mq_ops->map_queue(q, first_rq->mq_ctx->cpu);
+		blk_mq_tag_set_rq(hctx, first_rq->tag, flush_rq);
 	}
 
 	flush_rq->cmd_type = REQ_TYPE_FS;
@@ -474,8 +499,16 @@ void blk_insert_flush(struct request *rq)
 	    !(policy & (REQ_FSEQ_PREFLUSH | REQ_FSEQ_POSTFLUSH))) {
 		if (q->mq_ops) {
 			blk_mq_insert_request(rq, false, false, true);
-		} else
+#ifdef VENDOR_EDIT
+/*Huacai.Zhou@PSW.BSP.Kernel.Performance, 2018-04-28, add foreground task io opt*/
+		} else {
 			list_add_tail(&rq->queuelist, &q->queue_head);
+			queue_throtl_add_request(q, rq, false);
+		}
+#else
+	      	} else
+	        	list_add_tail(&rq->queuelist, &q->queue_head);
+#endif /*VENDOR_EDIT*/
 		return;
 	}
 
