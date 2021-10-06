@@ -224,9 +224,9 @@
 			#size-cells = <1>;
 
 			//qcom,iterm-ma = <100>;
-			qcom,float-voltage-mv = <4320>;
+			qcom,float-voltage-mv = <4380>;
 			qcom,resume-delta-mv = <200>;
-			//qcom,chg-inhibit-fg;
+			qcom,chg-inhibit-fg;
 			qcom,rparasitic-uohm = <100000>;
 			qcom,bms-psy-name = "bms";
 			//qcom,thermal-mitigation = <1500 700 600 0>;
@@ -253,57 +253,74 @@
 			//qcom,suspend_after_full;
 			qcom,external_gauge;
 			
-			qcom,removed_bat_decidegc = <190>;  /*<-19C*/
+			qcom,removed_bat_decidegc = <190>;  			       /*<-19C*/
 			
-			qcom,cold_bat_decidegc = <30>;  /*-3C~0C*/
-			qcom,temp_cold_vfloat_mv = <4000>;
+			qcom,cold_bat_decidegc = <30>;               			/*-3C~0C*/
+			qcom,temp_cold_vfloat_mv = <3980>;
 			qcom,temp_cold_fastchg_current_ma = <325>;
 			
-			qcom,little_cold_bat_decidegc = <0>;	/*0C~5C*/
-			qcom,temp_little_cold_vfloat_mv = <4320>;
-			qcom,temp_little_cold_fastchg_current_ma = <448>;
+			qcom,little_cold_bat_decidegc = <0>;         			/*0C~5C*/
+			qcom,temp_little_cold_vfloat_mv = <4380>;
+			qcom,temp_little_cold_fastchg_current_ma = <417>;
 			
-			qcom,cool_bat_decidegc = <50>;	/*5C~12C*/
-			qcom,temp_cool_vfloat_mv = <4320>;
-			qcom,temp_cool_fastchg_current_ma_high = <747>;
-			qcom,temp_cool_fastchg_current_ma_low = <448>;
+			qcom,cool_bat_decidegc = <50>;	  			  			/*5C~12C*/
+			qcom,temp_cool_vfloat_mv = <4380>;
+			qcom,temp_cool_fastchg_current_ma_high = <841>;
+			qcom,temp_cool_fastchg_current_ma_low = <417>;
 			
-			qcom,little_cool_bat_decidegc = <120>;	/*12C~16C*/
-			qcom,temp_little_cool_vfloat_mv = <4320>;
-			qcom,temp_little_cool_fastchg_current_ma = <1196>;	
+			qcom,little_cool_bat_decidegc = <120>;	      			/*12C~16C*/
+			qcom,temp_little_cool_vfloat_mv = <4380>;
+			qcom,temp_little_cool_fastchg_current_ma = <1278>;	
 			
-			qcom,normal_bat_decidegc = <160>;	/*16C~45C*/
+			qcom,normal_bat_decidegc = <160>;	         			/*16C~45C*/
 			qcom,temp_normal_fastchg_current_ma = <1910>;
-			qcom,temp_normal_vfloat_mv_normalchg = <4320>;
-			qcom,temp_normal_vfloat_mv_voocchg = <4352>;
+			qcom,temp_normal_vfloat_mv_normalchg = <4380>;
+			qcom,temp_normal_vfloat_mv_voocchg = <4380>;
 			
-			qcom,warm_bat_decidegc = <450>;		/*45C~55C*/
-			qcom,temp_warm_vfloat_mv = <4100>;
-			qcom,temp_warm_fastchg_current_ma = <747>;
+			qcom,warm_bat_decidegc = <450>;	        				/*45C~53C*/
+			qcom,temp_warm_vfloat_mv = <4080>;
+			qcom,temp_warm_fastchg_current_ma = <841>;
 			
-			qcom,hot_bat_decidegc = <530>;
+			qcom,hot_bat_decidegc = <530>;                          /* 53C <*/
 			
-			qcom,non_standard_vfloat_mv = <4000>;
+			qcom,non_standard_vfloat_mv = <3980>;
 			qcom,non_standard_fastchg_current_ma = <512>;
 
-			qcom,non_standard_vfloat_sw_limit = <3960>;
-			qcom,cold_vfloat_sw_limit = <3960>;
+			qcom,non_standard_vfloat_sw_limit = <3930>;
+			qcom,cold_vfloat_sw_limit = <3930>;
 			qcom,little_cold_vfloat_sw_limit = <4330>;
 			qcom,cool_vfloat_sw_limit = <4330>;
 			qcom,little_cool_vfloat_sw_limit = <4330>;
 			qcom,normal_vfloat_sw_limit = <4330>;
-			qcom,warm_vfloat_sw_limit = <4060>;
-			
+			qcom,warm_vfloat_sw_limit = <4030>;
+
+	/* wenbin.liu add for short c detect 2017.11.06 */
+			qcom,short_c_bat_cv_mv = <4330>;
+			qcom,short_c_bat_vfloat_mv = <3650>;
+			qcom,short_c_bat_fastchg_current_ma = <512>;
+			qcom,short_c_bat_vfloat_sw_limit = <3600>;
+			qcom,check_batt_full_by_sw;
+
 			qcom,max_chg_time_sec = <36000>;
 			qcom,charger_hv_thr = <5800>;
 			qcom,charger_lv_thr = <3400>;
-			qcom,vbatt_full_thr = <4400>;
+			qcom,vbatt_full_thr = <4470>;
 			qcom,vbatt_hv_thr = <4500>;
+			qcom,vfloat_step_mv = <20>;
 			qcom,vooc_project;
 			qcom,chg_ctrl_by_lcd;
 			qcom,chg_ctrl_by_camera;
+			qcom,skip-fg-control-chg;
 //#endif /* VENDOR_EDIT */
 
+//#ifdef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/15 add for charger id switch gpio
+			qcom,chargerid_switch-gpio		= <&tlmm 9 0x00>;
+			pinctrl-names = "chargerid_switch_active", "chargerid_switch_sleep", "chargerid_switch_default";
+			pinctrl-0 = <&chargerid_switch_active>;
+			pinctrl-1 = <&chargerid_switch_sleep>;
+			pinctrl-2 = <&chargerid_switch_default>;
+//#endif
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
 				interrupts =	<0x2 0x10 0x0>,
@@ -409,7 +426,7 @@
 			qcom,bcl-lm-threshold-ma = <127>;
 			qcom,bcl-mh-threshold-ma = <405>;
 			qcom,fg-iterm-ma = <150>;
-			qcom,fg-chg-iterm-ma = <100>;
+			qcom,fg-chg-iterm-ma = <150>;	//Fuchun.Liao@Mobile.BSP.CHG 2016/07/29 modify iterm-ma from 100ma to 150ma
 			qcom,pmic-revid = <&pmi8950_revid>;
 			qcom,fg-cutoff-voltage-mv = <3500>;
 			qcom,cycle-counter-en;

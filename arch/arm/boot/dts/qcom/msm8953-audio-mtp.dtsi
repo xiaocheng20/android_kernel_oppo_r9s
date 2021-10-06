@@ -14,7 +14,11 @@
 &int_codec {
 	status = "okay";
 	qcom,model = "msm8953-snd-card-mtp";
-	qcom,msm-hs-micbias-type = "internal";
+	/*OPPO 2016-10-14 zhzhyon@AudioDriver Modify for sound config*/
+	/*
+	qcom,msm-hs-micbias-type = "internal";*/
+	qcom,msm-hs-micbias-type = "external";
+	/*OPPO 2016-10-14 zhzhyon@AudioDriver Modify end*/
 };
 
 &pm8953_diangu_dig {
@@ -24,7 +28,8 @@
 &pm8953_diangu_analog {
 	status = "okay";
 };
-
+/*OPPO 2016-07-12 zhzhyon@AudioDriver Delete for sound config*/
+/*
 &wsa881x_i2c_e {
 	status = "okay";
 };
@@ -40,3 +45,5 @@
 &wsa881x_i2c_45 {
 	status = "okay";
 };
+*/
+/*OPPO 2016-07-12 zhzhyon@AudioDriver Delete end*/

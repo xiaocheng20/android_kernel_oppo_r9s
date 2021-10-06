@@ -216,16 +216,6 @@
 		qcom,client-id = <0x00000001>;
 	};
 
-	/*#ifdef VENDOR_EDIT */
-    /*WenLong.Cai@Mobile.Network, 2016/08/17 add for enlarge nv backup memory */
-	qcom,oembackup_sharedmem@0 {
-		compatible = "qcom,sharedmem-uio";
-		reg = <0x0 0x00100000>; /* '0' indicates dynamic allocation */
-		reg-names = "oembackup";
-		qcom,client-id = <0x00000003>;
-	};
-	/*#endif  VENDOR_EDIT */
-
 	restart@4ab000 {
 		compatible = "qcom,pshold";
 		reg = <0x4ab000 0x4>,
@@ -1503,8 +1493,6 @@
 		qcom,use-sw-aes-xts-algo;
 		qcom,use-sw-aes-ccm-algo;
 		qcom,use-sw-ahash-algo;
-		qcom,use-sw-hmac-algo;
-		qcom,use-sw-aead-algo;
 		qcom,ce-opp-freq = <100000000>;
 	};
 

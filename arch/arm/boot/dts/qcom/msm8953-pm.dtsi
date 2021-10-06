@@ -402,6 +402,10 @@
 			<0xff 264>, /* arm-smmu context fault */
 			<0xff 269>, /* rpm_wdog_expired_irq */
 			<0xff 270>, /* blsp1_bam_irq[0] */
+			/* #ifdef VENDOR_EDIT */
+			/* //Wenxian.zhen@Prd.BaseDrv, 2016/07/19, adding for solving can not enter vdmin during idle*/
+			<0xff 271>,  
+			/* #endif VENDOR_EDIT */
 			<0xff 273>, /* smmu_bus_intr[18] */
 			<0xff 274>, /* smmu_bus_intr[19] */
 			<0xff 275>, /* rpm_ipc(30) */
@@ -416,8 +420,13 @@
 			<0xff 314>, /* CCISAW_svicInt */
 			<0xff 321>, /* q6ss_irq_out(4) */
 			<0xff 322>, /* q6ss_irq_out(5) */
-			<0xff 323>, /* q6ss_irq_out(6) */
+			<0xff 323>, /* q6ss_irq_out(6) */		
 			<0xff 325>, /* q6ss_wdog_exp_irq */
+			/* #ifdef VENDOR_EDIT */
+			/* //Wenxian.zhen@Prd.BaseDrv, 2016/07/19, adding for solving can not enter vdmin during idle*/
+			<0xff 331>,  
+			<0xff 334>,
+			/* #endif VENDOR_EDIT */
 			<0xff 344>, /* sdcc_ice_nonsec_level_irq */
 			<0xff 346>; /* tsens_critical_int */
 

@@ -519,10 +519,10 @@ dtb-$(CONFIG_ARCH_MEDIATEK) += mt6589-aquaris5.dtb
 
 #used for cleaning - not building
 #ifndef VENDOR_EDIT//Fanhong.Kong@ProDrv.CHG,add 2016/6/11 for boot mode 
-#subdir- := qcom
+subdir- := qcom
 #else
 #ifeq ($(OPPO_TARGET_DEVICE),MSM_16017)
-subdir- := 16017 16027 16061
+#subdir- := 16017 16027 16061
 #else ifeq ($(OPPO_TARGET_DEVICE),MSM_16027)
 #subdir- := 16027
 #else

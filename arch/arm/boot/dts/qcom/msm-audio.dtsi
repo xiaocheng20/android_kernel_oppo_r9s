@@ -545,7 +545,8 @@
 		asoc-codec = <&stub_codec>, <&hdmi_dba>;
 		asoc-codec-names = "msm-stub-codec.1", "msm-hdmi-dba-codec-rx";
 	};
-
+	/*OPPO 2016-07-12 zhzhyon@AudioDriver Delete for sound config*/
+	/*
 	i2c@78b6000 {
 		wsa881x_i2c_e: wsa881x-i2c-codec@e {
 			status = "disabled";
@@ -624,6 +625,8 @@
 			reg = <0x45>;
 		};
 	};
+	*/
+	/*OPPO 2016-07-12 zhzhyon@AudioDriver Delete end*/
 
 	wcd9xxx_intc: wcd9xxx-irq {
 		status = "disabled";

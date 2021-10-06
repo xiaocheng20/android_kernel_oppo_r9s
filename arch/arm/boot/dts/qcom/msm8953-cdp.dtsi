@@ -103,9 +103,9 @@
 			debounce-interval = <15>;
 		};
 	};
-	
-	//#ifdef VENDOR_EDIT	
-	//Wanghao@phone.bsp.tp,del 2016/06/23 for close hbtp
+
+	//#ifdef VENDOR_EDIT
+	//Wanghao@phone.bsp.tp,del 2017/01/03 for close hbtp
 	/*hbtp {
 		compatible = "qcom,hbtp-input";
 		vcc_ana-supply = <&pm8953_l10>;
@@ -117,7 +117,7 @@
 		qcom,dig-vtg-min = <1800000>;
 		qcom,dig-vtg-max = <1800000>;
 	};*/
-	//#endif /* VENDOR_EDIT */	
+	//#endif /* VENDOR_EDIT */
 };
 
 &tlmm {

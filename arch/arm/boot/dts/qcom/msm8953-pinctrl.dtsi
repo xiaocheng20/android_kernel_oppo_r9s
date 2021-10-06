@@ -110,6 +110,53 @@
 				};
 			};
 		};
+		
+//ifdef VENDOR_EDIT
+/*ziqing.guo@phone.bsp 2016-07-23 add for fingerprint compatibility */
+	oppo_fp_common{
+		gpio_id0_default: gpio_id0_default {
+			mux {
+				pins = "gpio60";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio60";
+				drive-strength = <4>;
+				bias-pull-down;
+				output-low;
+			};
+		};
+		
+		gpio_id1_default: gpio_id1_default {
+			mux {
+				pins = "gpio61";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio61";
+				drive-strength = <2>;
+				bias-pull-up;
+				input-enable;
+			};
+		};
+		
+		gpio_id2_default: gpio_id2_default {
+			mux {
+				pins = "gpio141";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio141";
+				drive-strength = <2>;
+				bias-pull-up;
+				input-enable;
+			};
+		};
+    };
+//#endif/*VENDOR_EDIT*/
 
 //#ifdef VENDOR_EDIT
 //Fuchun.Liao@Mobile.BSP.CHG 2016/06/13 add for charge
@@ -217,8 +264,118 @@
 					bias-disable; /* NO PULL */
 				};
 			};
+			
+			chargerid_switch_active: chargerid_switch_active {
+				mux {
+					pins = "gpio9";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio9";
+					drive-strength = <2>; 
+					bias-pull-up; /*  PULL	UP*/
+				};
+			};
+
+			chargerid_switch_sleep: chargerid_switch_sleep {
+				mux {
+					pins = "gpio9";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio9";
+					drive-strength = <2>; 
+					bias-pull-down; /* PULL DOWN */
+				};
+			};
+
+			chargerid_switch_default: chargerid_switch_default {
+				mux {
+					pins = "gpio9";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio9";
+					drive-strength = <2>; 
+					bias-disable; /* NO PULL */
+				};
+			};
 		};
 //#endif /* VENDOR_EDIT */
+		
+//ifdef VENDOR_EDIT
+//Fanhong.Kong@ProDrv.CHG,modified 2016.06.20 for  devinfo
+	oppo_devinfo{
+		hw_operator_gpio1_active: hw_operator_gpio1_active {
+			mux {
+				pins = "gpio66";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio66";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+		
+		hw_operator_gpio2_active: hw_operator_gpio2_active {
+			mux {
+				pins = "gpio88";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio88";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+		
+		hw_operator_gpio3_active: hw_operator_gpio3_active {
+			mux {
+				pins = "gpio97";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio97";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+		
+		hw_sub_gpio1_active: hw_sub_gpio1_active {
+			mux {
+				pins = "gpio12";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio12";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};	
+/*		hw_sub_gpio2_active: hw_sub_gpio2_active {
+			mux {
+				pins = "gpio58";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio58";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+*/			
+    };
+//#endif/*VENDOR_EDIT*/
+	
 		
 		/*sensors */
 		cam_sensor_mclk0_default: cam_sensor_mclk0_default {
@@ -254,12 +411,12 @@
 		cam_sensor_rear_default: cam_sensor_rear_default {
 			/* RESET, STANDBY */
 			mux {
-				pins = "gpio40", "gpio39";
+				pins = "gpio40";//pins = "gpio40", "gpio39"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio40","gpio39";
+				pins = "gpio40";//pins = "gpio40","gpio39"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
@@ -268,40 +425,40 @@
 		cam_sensor_rear_sleep: cam_sensor_rear_sleep {
 			/* RESET, STANDBY */
 			mux {
-				pins = "gpio40","gpio39";
+				pins = "gpio40";//pins = "gpio40","gpio39"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio40","gpio39";
+				pins = "gpio40";//pins = "gpio40","gpio39"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
 		};
 
-		cam_sensor_rear_vana: cam_sensor_rear_vdig {
+		cam_sensor_rear_vana: cam_sensor_rear_vana {//cam_sensor_rear_vdig Jinshui.Liu 20160707 for camera
 			/* VDIG */
 			mux {
-				pins = "gpio134";
+				pins = "gpio47";//pins = "gpio134"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio134";
+				pins = "gpio47";//pins = "gpio134"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
 		};
 
-		cam_sensor_rear_vana_sleep: cam_sensor_rear_vdig_sleep {
+		cam_sensor_rear_vana_sleep: cam_sensor_rear_vana_sleep {//cam_sensor_rear_vdig_sleep Jinshui.Liu 20160707 for camera
 			/* VDIG */
 			mux {
-				pins = "gpio134";
+				pins = "gpio47";//pins = "gpio134"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio134";
+				pins = "gpio47";//pins = "gpio134"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
@@ -398,12 +555,12 @@
 		cam_sensor_front1_default: cam_sensor_front1_default {
 			/* RESET, STANDBY */
 			mux {
-				pins = "gpio129", "gpio130";
+				pins = "gpio36", "gpio129", "gpio130";//pins = "gpio129", "gpio130"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio129", "gpio130";
+				pins = "gpio36", "gpio129", "gpio130";//pins = "gpio129", "gpio130"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
@@ -412,12 +569,12 @@
 		cam_sensor_front1_sleep: cam_sensor_front1_sleep {
 			/* RESET, STANDBY */
 			mux {
-				pins = "gpio129", "gpio130";
+				pins = "gpio36", "gpio129", "gpio130";//pins = "gpio129", "gpio130"; Jinshui.Liu 20160707 for camera
 				function = "gpio";
 			};
 
 			config {
-				pins = "gpio129", "gpio130";
+				pins = "gpio36", "gpio129", "gpio130";//pins = "gpio129", "gpio130"; Jinshui.Liu 20160707 for camera
 				bias-disable; /* No PULL */
 				drive-strength = <2>; /* 2 MA */
 			};
@@ -504,15 +661,15 @@
 				};
 			};
 		};
-
+        //Shengjun.Gou@SWDP.MultiMedia, 2016/06/09,  Modify for 16017 LCD driver te and mipi-err-fg not used
 		pmx_mdss_te {
 			mdss_te_active: mdss_te_active {
 				mux {
-					pins = "gpio24";
+					pins = "gpio24", "gpio63", "gpio134";
 					function = "mdp_vsync";
 				};
 				config {
-					pins = "gpio24";
+					pins = "gpio24", "gpio63", "gpio134";
 					drive-strength = <2>; /* 8 mA */
 					bias-pull-down; /* pull down*/
 				};
@@ -520,11 +677,11 @@
 
 			mdss_te_suspend: mdss_te_suspend {
 				mux {
-					pins = "gpio24";
+					pins = "gpio24", "gpio63", "gpio134";
 					function = "mdp_vsync";
 				};
 				config {
-					pins = "gpio24";
+					pins = "gpio24", "gpio63", "gpio134";
 					drive-strength = <2>; /* 2 mA */
 					bias-pull-down; /* pull down */
 				};
@@ -1441,65 +1598,68 @@ sim2_cd_off: sim2_cd_off {
 			};
 		};
 
-		spi3 {
-			spi3_default: spi3_default {
-				/* active state */
-				mux {
-					/* MOSI, MISO, CLK */
-					pins = "gpio8", "gpio9", "gpio11";
-					function = "blsp_spi3";
-				};
-
-				config {
-					pins = "gpio8", "gpio9", "gpio11";
-					drive-strength = <12>; /* 12 MA */
-					bias-disable = <0>; /* No PULL */
-				};
-			};
-
-			spi3_sleep: spi3_sleep {
-				/* suspended state */
-				mux {
-					/* MOSI, MISO, CLK */
-					pins = "gpio8", "gpio9", "gpio11";
-					function = "gpio";
-				};
-
-				config {
-					pins = "gpio8", "gpio9", "gpio11";
-					drive-strength = <2>; /* 2 MA */
-					bias-pull-down; /* PULL Down */
-				};
-			};
-
-			spi3_cs0_active: cs0_active {
-				/* CS */
-				mux {
-					pins = "gpio10";
-					function = "blsp_spi3";
-				};
-
-				config {
-					pins = "gpio10";
-					drive-strength = <2>;
-					bias-disable = <0>;
-				};
-			};
-
-			spi3_cs0_sleep: cs0_sleep {
-				/* CS */
-				mux {
-					pins = "gpio10";
-					function = "gpio";
-				};
-
-				config {
-					pins = "gpio10";
-					drive-strength = <2>;
-					bias-disable = <0>;
-				};
-			};
-		};
+//#ifndef VENDOR_EDIT
+//Fuchun.Liao@Mobile.BSP.CHG 2016/07/15 del for spi3_default use gpio9(chargerid switch gpio)
+//		spi3 {
+//			spi3_default: spi3_default {
+//				/* active state */
+//				mux {
+//					/* MOSI, MISO, CLK */
+//					pins = "gpio8", "gpio9", "gpio11";
+//					function = "blsp_spi3";
+//				};
+//
+//				config {
+//					pins = "gpio8", "gpio9", "gpio11";
+//					drive-strength = <12>; /* 12 MA */
+//					bias-disable = <0>; /* No PULL */
+//				};
+//			};
+//
+//			spi3_sleep: spi3_sleep {
+//				/* suspended state */
+//				mux {
+//					/* MOSI, MISO, CLK */
+//					pins = "gpio8", "gpio9", "gpio11";
+//					function = "gpio";
+//				};
+//
+//				config {
+//					pins = "gpio8", "gpio9", "gpio11";
+//					drive-strength = <2>; /* 2 MA */
+//					bias-pull-down; /* PULL Down */
+//				};
+//			};
+//
+//			spi3_cs0_active: cs0_active {
+//				/* CS */
+//				mux {
+//					pins = "gpio10";
+//					function = "blsp_spi3";
+//				};
+//
+//				config {
+//					pins = "gpio10";
+//					drive-strength = <2>;
+//					bias-disable = <0>;
+//				};
+//			};
+//
+//			spi3_cs0_sleep: cs0_sleep {
+//				/* CS */
+//				mux {
+//					pins = "gpio10";
+//					function = "gpio";
+//				};
+//
+//				config {
+//					pins = "gpio10";
+//					drive-strength = <2>;
+//					bias-disable = <0>;
+//				};
+//			};
+//		};
+//#enidf /* VENDOR_EDIT */
 
 		/* add pingrp for touchscreen */
 		pmx_ts_int_active {
@@ -1551,12 +1711,12 @@ sim2_cd_off: sim2_cd_off {
 		pmx_ts_reset_active {
 			ts_reset_active: ts_reset_active {
 				mux {
-					pins = "gpio64";
+					pins = "gpio16";
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio64";
+					pins = "gpio16";
 					drive-strength = <8>;
 					bias-pull-up;
 				};
@@ -1598,12 +1758,22 @@ sim2_cd_off: sim2_cd_off {
 		tlmm_gpio_key {
 			gpio_key_active: gpio_key_active {
 				mux {
-					pins = "gpio85", "gpio86", "gpio13";
+//#ifndef VENDOR_EDIT 	
+//ziqing.guo@BasicDrv.Sensor,2016/07/11, modify for touch fingerprint sensor
+					//pins = "gpio85", "gpio86", "gpio13";
+//#else
+                    pins = "gpio85", "gpio86";
+//#endif /*VENDOR_EDIT*/
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio85", "gpio86", "gpio13";
+//#ifndef VENDOR_EDIT 	
+//ziqing.guo@BasicDrv.Sensor,2016/07/11, modify for touch fingerprint sensor
+					//pins = "gpio85", "gpio86", "gpio13";
+//#else
+                    pins = "gpio85", "gpio86";
+//#endif /*VENDOR_EDIT*/
 					drive-strength = <2>;
 					bias-pull-up;
 				};
@@ -1611,12 +1781,22 @@ sim2_cd_off: sim2_cd_off {
 
 			gpio_key_suspend: gpio_key_suspend {
 				mux {
-					pins = "gpio85", "gpio86", "gpio13";
+//#ifndef VENDOR_EDIT 	
+//ziqing.guo@BasicDrv.Sensor,2016/07/11, modify for touch fingerprint sensor			
+					//pins = "gpio85", "gpio86", "gpio13";
+//#else
+                    pins = "gpio85", "gpio86";
+//#endif /*VENDOR_EDIT*/
 					function = "gpio";
 				};
 
 				config {
-					pins = "gpio85", "gpio86", "gpio13";
+//#ifndef VENDOR_EDIT 	
+//ziqing.guo@BasicDrv.Sensor,2016/07/11, modify for touch fingerprint sensor
+					//pins = "gpio85", "gpio86", "gpio13";
+//#else
+                    pins = "gpio85", "gpio86";
+//#endif /*VENDOR_EDIT*/
 					drive-strength = <2>;
 					bias-pull-up;
 				};
