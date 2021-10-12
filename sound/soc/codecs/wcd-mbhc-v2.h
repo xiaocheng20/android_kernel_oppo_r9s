@@ -256,6 +256,11 @@ struct wcd_mbhc_config {
 	int mbhc_micbias;
 	int anc_micbias;
 	bool enable_anc_mic_detect;
+    /*OPPO	2015-12-18, zhangping add for  dump log*/
+    #ifdef VENDOR_EDIT
+    int dump_status;
+    #endif
+    /*OPPO	2015-12-18, zhangping add for  dump log end*/
 };
 
 struct wcd_mbhc_intr {
