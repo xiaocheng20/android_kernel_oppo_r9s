@@ -25,6 +25,11 @@
 #include <stddef.h>
 #include <linux/compat.h>
 
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+#include <soc/oppo/mmkey_log.h>
+#endif /*VENDOR_EDIT*/
+
 #include "kgsl.h"
 #include "kgsl_device.h"
 #include "kgsl_mmu.h"
@@ -681,6 +686,10 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 	if (!no_page_fault_log && __ratelimit(&_rs)) {
 		KGSL_MEM_CRIT(ctx->kgsldev,
 			"GPU PAGE FAULT: addr = %lX pid= %d\n", addr, ptname);
+#ifdef VENDOR_EDIT
+/* Xinqin.Yang@Mobile Phone Software Dept.Driver, 2015/10/22  Add for except log */
+		mm_keylog_write("kgsl iommu fault\n", "GPU PAGE FAULT\n", TYPE_IOMMU_ERROR);
+#endif /*VENDOR_EDIT*/
 		KGSL_MEM_CRIT(ctx->kgsldev,
 			"context=%s TTBR0=0x%llx CIDR=0x%x (%s %s fault)\n",
 			ctx->name, ptbase, contextidr,
@@ -1582,15 +1591,47 @@ kgsl_iommu_map(struct kgsl_pagetable *pt,
 	uint64_t addr = memdesc->gpuaddr;
 	uint64_t size = memdesc->size;
 	unsigned int flags = _get_protection_flags(memdesc);
+    #ifdef VENDOR_EDIT
+    //Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+    //add for GPU performance
 
-	ret = _iommu_map_sg_sync_pc(pt, addr, memdesc, memdesc->sgt->sgl,
-			memdesc->sgt->nents, flags);
-	if (ret)
-		return ret;
+    struct sg_table *sgt = NULL;
 
-	ret = _iommu_map_guard_page(pt, memdesc, addr + size, flags);
-	if (ret)
-		_iommu_unmap_sync_pc(pt, memdesc, addr, size);
+    /*
+         * For paged memory allocated through kgsl, memdesc->pages is not NULL.
+         * Allocate sgt here just for its map operation. Contiguous memory
+         * already has its sgt, so no need to allocate it here.
+         */
+    if (memdesc->pages != NULL)
+        sgt = kgsl_alloc_sgt_from_pages(memdesc);
+    else
+        sgt = memdesc->sgt;
+
+    if (IS_ERR(sgt))
+        return PTR_ERR(sgt);
+
+    ret = _iommu_map_sg_sync_pc(pt, addr, memdesc, sgt->sgl,
+                sgt->nents, flags);
+    if (ret)
+        goto done;
+
+    ret = _iommu_map_guard_page(pt, memdesc, addr + size, flags);
+    if (ret)
+        _iommu_unmap_sync_pc(pt, memdesc, addr, size);
+
+done:
+    if (memdesc->pages != NULL)
+        kgsl_free_sgt(sgt);
+    #else
+    ret = _iommu_map_sg_sync_pc(pt, addr, memdesc, memdesc->sgt->sgl,
+            memdesc->sgt->nents, flags);
+    if (ret)
+        return ret;
+
+    ret = _iommu_map_guard_page(pt, memdesc, addr + size, flags);
+    if (ret)
+        _iommu_unmap_sync_pc(pt, memdesc, addr, size);
+    #endif /**VENDOR_EDIT*/
 
 	return ret;
 }
@@ -1602,17 +1643,52 @@ static int kgsl_iommu_map_offset(struct kgsl_pagetable *pt,
 {
 	int pg_sz;
 	unsigned int protflags = _get_protection_flags(memdesc);
+    #ifdef VENDOR_EDIT
+    //Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+    //add for GPU performance
+    int ret;
+    struct sg_table *sgt = NULL;
 
-	pg_sz = (1 << kgsl_memdesc_get_align(memdesc));
-	if (!IS_ALIGNED(virtaddr | virtoffset | physoffset | size, pg_sz))
-		return -EINVAL;
+    pg_sz = (1 << kgsl_memdesc_get_align(memdesc));
+    if (!IS_ALIGNED(virtaddr | virtoffset | physoffset | size, pg_sz))
+        return -EINVAL;
 
-	if (size == 0)
-		return -EINVAL;
+    if (size == 0)
+        return -EINVAL;
 
-	return _iommu_map_sg_offset_sync_pc(pt, virtaddr + virtoffset,
-			memdesc, memdesc->sgt->sgl, memdesc->sgt->nents,
-			physoffset, size, protflags);
+    /*
+         * For paged memory allocated through kgsl, memdesc->pages is not NULL.
+         * Allocate sgt here just for its map operation. Contiguous memory
+         * already has its sgt, so no need to allocate it here.
+         */
+    if (memdesc->pages != NULL)
+        sgt = kgsl_alloc_sgt_from_pages(memdesc);
+    else
+        sgt = memdesc->sgt;
+
+    if (IS_ERR(sgt))
+        return PTR_ERR(sgt);
+
+    ret = _iommu_map_sg_offset_sync_pc(pt, virtaddr + virtoffset,
+        memdesc, sgt->sgl, sgt->nents,
+        physoffset, size, protflags);
+
+    if (memdesc->pages != NULL)
+        kgsl_free_sgt(sgt);
+
+    return ret;
+    #else
+    pg_sz = (1 << kgsl_memdesc_get_align(memdesc));
+    if (!IS_ALIGNED(virtaddr | virtoffset | physoffset | size, pg_sz))
+        return -EINVAL;
+
+    if (size == 0)
+        return -EINVAL;
+
+    return _iommu_map_sg_offset_sync_pc(pt, virtaddr + virtoffset,
+            memdesc, memdesc->sgt->sgl, memdesc->sgt->nents,
+            physoffset, size, protflags);
+    #endif /**VENDOR_EDIT*/
 }
 
 /* This function must be called with context bank attached */

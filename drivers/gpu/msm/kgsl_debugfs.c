@@ -145,12 +145,23 @@ static int print_mem_entry(int id, void *ptr, void *data)
 
 	kgsl_get_memory_usage(usage, sizeof(usage), m->flags);
 
-	seq_printf(s, "%pK %pK %16llu %5d %9s %10s %16s %5d %16llu",
-			(uint64_t *)(uintptr_t) m->gpuaddr,
-			(unsigned long *) m->useraddr,
-			m->size, entry->id, flags,
-			memtype_str(kgsl_memdesc_usermem_type(m)),
-			usage, m->sgt->nents, m->mapsize);
+    #ifdef VENDOR_EDIT
+    //Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+    //add for GPU performance
+    seq_printf(s, "%pK %pK %16llu %5d %9s %10s %16s %5d %16llu",
+            (uint64_t *)(uintptr_t) m->gpuaddr,
+            (unsigned long *) m->useraddr,
+            m->size, entry->id, flags,
+            memtype_str(kgsl_memdesc_usermem_type(m)),
+            usage, (m->sgt ? m->sgt->nents : 0), m->mapsize);
+    #else
+    seq_printf(s, "%pK %pK %16llu %5d %9s %10s %16s %5d %16llu",
+        (uint64_t *)(uintptr_t) m->gpuaddr,
+        (unsigned long *) m->useraddr,
+        m->size, entry->id, flags,
+        memtype_str(kgsl_memdesc_usermem_type(m)),
+        usage, m->sgt->nents, m->mapsize);
+    #endif /**VENDOR_EDIT*/
 
 	if (entry->metadata[0] != 0)
 		seq_printf(s, " %s", entry->metadata);

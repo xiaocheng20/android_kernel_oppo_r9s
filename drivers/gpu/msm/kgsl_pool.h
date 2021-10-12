@@ -34,10 +34,22 @@ kgsl_gfp_mask(unsigned int page_order)
 }
 
 void kgsl_pool_free_sgt(struct sg_table *sgt);
+#ifdef VENDOR_EDIT
+//Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+//add for GPU performance
+void kgsl_pool_free_pages(struct page **pages, unsigned int page_count);
+#endif /**VENDOR_EDIT*/
 void kgsl_init_page_pools(void);
 void kgsl_exit_page_pools(void);
+#ifdef VENDOR_EDIT
+//Deliang.Peng@MultiMedia.Display.GPU.Perf, 2017/2/20,
+//add for GPU performance
+int kgsl_pool_alloc_page(int *page_size, struct page **pages,
+            unsigned int pages_len, unsigned int *align);
+#else
 int kgsl_pool_alloc_page(int page_size, struct page **pages,
-						unsigned int pages_len);
+                        unsigned int pages_len);
+#endif /**VENDOR_EDIT*/
 void kgsl_pool_free_page(struct page *p);
 #endif /* __KGSL_POOL_H */
 
