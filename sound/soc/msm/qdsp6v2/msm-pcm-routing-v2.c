@@ -2063,7 +2063,12 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: msm_route_ec_ref_rx = %d\n",
 	    __func__, msm_route_ec_ref_rx);
 	mutex_unlock(&routing_lock);
+	#ifndef VENDOR_EDIT
+	/*ping.zhang@PhoneSw.AudioDriver, 2017/02/04, Add for feedback because of strcmp error in snd*/
 	snd_soc_dapm_mux_update_power(widget->dapm, kcontrol, mux, e, update);
+	#else
+	snd_soc_dapm_mux_update_power(widget->dapm, kcontrol, msm_route_ec_ref_rx, e, update);
+	#endif/* VENDOR_EDIT */
 	return 0;
 }
 
@@ -5215,6 +5220,13 @@ static const struct snd_kcontrol_new quat_mi2s_rx_port_mixer_controls[] = {
 	SOC_SINGLE_EXT("INTERNAL_FM_TX", MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
 	MSM_BACKEND_DAI_INT_FM_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+	/*OPPO 2014-08-05 zhzhyon Add for quat i2s loopback*/
+	#ifdef VENDOR_EDIT
+	SOC_SINGLE_EXT("TERT_MI2S_TX_QUAT", MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
+	MSM_BACKEND_DAI_TERTIARY_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+	#endif
+	/*OPPO 2014-08-05 zhzhyon Add end*/
 	SOC_SINGLE_EXT("AUX_PCM_UL_TX", MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
 	MSM_BACKEND_DAI_AUXPCM_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
@@ -5800,6 +5812,14 @@ static const struct snd_kcontrol_new sec_mi2s_rx_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_SECONDARY_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
 };
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for quin mi2s loopback
+static const struct snd_kcontrol_new quin_mi2s_rx_port_mixer_controls[] = {
+	SOC_SINGLE_EXT("TERT_MI2S_TX_QUIN", MSM_BACKEND_DAI_QUINARY_MI2S_RX,
+	MSM_BACKEND_DAI_TERTIARY_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+};
+#endif /* VENDOR_EDIT */
 
 static const struct snd_kcontrol_new slim_fm_switch_mixer_controls =
 	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
@@ -6676,6 +6696,15 @@ static const struct snd_kcontrol_new mi2s_rx_vi_fb_mux =
 	mi2s_rx_vi_fb_mux_enum, spkr_prot_get_vi_lch_port,
 	spkr_prot_put_vi_lch_port);
 
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for headset loopback
+static const struct snd_kcontrol_new quin_mi2s_rx_switch_mixer_controls =
+	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
+	0, 1, 0, msm_routing_get_switch_mixer,
+	msm_routing_put_switch_mixer);
+#endif /* VENDOR_EDIT */
+
+
 static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	/* Frontend AIF */
 	/* Widget name equals to Front-End DAI name<Need confirmation>,
@@ -6763,6 +6792,13 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_AIF_IN("TERT_MI2S_DL_HL",
 		"Tertiary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
+    /*OPPO 2014-08-05 zhzhyon Add for loopback*/
+    #ifdef VENDOR_EDIT
+    SND_SOC_DAPM_AIF_IN("TERT_MI2S_DL_HL_MMI",
+        "Tertiary MI2S_TX Hostless Playback",
+        0, 0, 0, 0),
+    #endif
+    /*OPPO 2014-08-05 zhzhyon Add end*/
 	SND_SOC_DAPM_AIF_IN("QUAT_MI2S_DL_HL",
 		"Quaternary MI2S_RX Hostless Playback",
 		0, 0, 0, 0),
@@ -7562,7 +7598,24 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 		&ext_ec_ref_mux_ul8),
 	SND_SOC_DAPM_MUX("AUDIO_REF_EC_UL9 MUX", SND_SOC_NOPM, 0, 0,
 		&ext_ec_ref_mux_ul9),
+
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for headset loopback
+	SND_SOC_DAPM_SWITCH("QUIN_MI2S_RX_DL_HL", SND_SOC_NOPM, 0, 0,
+				&quin_mi2s_rx_switch_mixer_controls),
+	SND_SOC_DAPM_MIXER("QUIN_MI2S_RX Port Mixer", SND_SOC_NOPM, 0, 0,
+	            quin_mi2s_rx_port_mixer_controls, ARRAY_SIZE(quin_mi2s_rx_port_mixer_controls)),
+#endif /* VENDOR_EDIT */
 };
+
+#ifdef VENDOR_EDIT
+//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for headset and speaker loopback
+static const struct snd_soc_dapm_route intercon_tert_i2s[] =
+{
+	{"QUAT_MI2S_RX_DL_HL", "Switch", "TERT_MI2S_DL_HL_MMI"},
+    {"QUIN_MI2S_RX_DL_HL", "Switch", "TERT_MI2S_DL_HL_MMI"},
+};
+#endif /* VENDOR_EDIT */
 
 static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_RX Audio Mixer", "MultiMedia1", "MM_DL1"},
@@ -8667,7 +8720,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"TERT_MI2S_RX_DL_HL", "Switch", "TERT_MI2S_DL_HL"},
 	{"TERT_MI2S_RX", NULL, "TERT_MI2S_RX_DL_HL"},
 
+	#ifndef VENDOR_EDIT //Jianfeng.Qiu@PhoneSw.Multimedia.Audio, 2014-04-14, Delete for no use and conflict
 	{"QUAT_MI2S_RX_DL_HL", "Switch", "QUAT_MI2S_DL_HL"},
+	#endif
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX_DL_HL"},
 	{"MI2S_UL_HL", NULL, "TERT_MI2S_TX"},
 	{"TERT_MI2S_UL_HL", NULL, "TERT_MI2S_TX"},
@@ -8677,6 +8732,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_DL_HL"},
 	{"TERT_MI2S_RX", NULL, "TERT_MI2S_DL_HL"},
 	{"QUAT_MI2S_UL_HL", NULL, "QUAT_MI2S_TX"},
+	#ifdef VENDOR_EDIT
+	//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for headset and receiver loopback
+	{"QUIN_MI2S_RX", NULL, "QUIN_MI2S_RX_DL_HL"},
+	#endif /* VENDOR_EDIT */
 
 	{"TERT_TDM_TX_0_UL_HL", NULL, "TERT_TDM_TX_0"},
 	{"TERT_TDM_TX_1_UL_HL", NULL, "TERT_TDM_TX_1"},
@@ -8987,6 +9046,12 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
+	#ifdef VENDOR_EDIT
+	//John.Xu@PhoneSw.AudioDriver, 2015/12/09, Add for quat quin mi2s loopback
+	{"QUAT_MI2S_RX Port Mixer", "TERT_MI2S_TX_QUAT", "TERT_MI2S_TX"},
+	{"QUIN_MI2S_RX Port Mixer", "TERT_MI2S_TX_QUIN", "TERT_MI2S_TX"},
+	{"QUIN_MI2S_RX", NULL, "QUIN_MI2S_RX Port Mixer"},
+	#endif /* VENDOR_EDIT */
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
 
 	/* Backend Enablement */
@@ -9473,6 +9538,12 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 {
 	snd_soc_dapm_new_controls(&platform->component.dapm, msm_qdsp6_widgets,
 			   ARRAY_SIZE(msm_qdsp6_widgets));
+	/*OPPO 2014-09-12 zhzhyon Add for loopback*/
+	#ifdef VENDOR_EDIT
+		snd_soc_dapm_add_routes(&platform->component.dapm, intercon_tert_i2s,
+			ARRAY_SIZE(intercon_tert_i2s));
+	#endif
+	/*OPPO 2014-09-12 zhzhyon Add end*/
 	snd_soc_dapm_add_routes(&platform->component.dapm, intercon,
 		ARRAY_SIZE(intercon));
 

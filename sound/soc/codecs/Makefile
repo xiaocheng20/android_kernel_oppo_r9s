@@ -376,3 +376,17 @@ obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
 # Amp
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
+#ifdef VENDOR_EDIT
+#John.Xu 2016-02-05 add for tfa9890 and ak4375 multi-project baseline
+ifneq ($(filter $(OPPO_TARGET_DEVICE),MSM_16017 MSM_16027),)
+snd-soc-ak4376-objs := ak4376.o
+obj-y += snd-soc-ak4376.o
+obj-y += tfa98xx/
+endif
+#endif /* VENDOR_EDIT */
+#ifdef VENDOR_EDIT
+#John.Xu 2016-02-27 add for reduce current for ct test
+ifneq ($(filter cmccfield cmcctest allnetcmcctest allnetcmccfield allnetcttest allnetctfield,$(NET_BUILD_TYPE)),)
+KBUILD_CFLAGS += -DOPPO_AUDIO_CTTEST
+endif
+#endif /* VENDOR_EDIT */
