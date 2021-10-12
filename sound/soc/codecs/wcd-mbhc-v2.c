@@ -1307,8 +1307,8 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	*/
 	//John.Xu@PhoneSw.AudioDriver, 2015/11/16, remove End
 	int rc, spl_hs_count = 0;
-	int cross_conn;
-	int try = 0;
+/*	int cross_conn;*/
+/*	int try = 0; */
 
 #ifdef VENDOR_EDIT
 //Jianfeng.Qiu@MultiMedia.AudioDriver.HeadsetDet, 2016/09/26, Add for necessary log
@@ -1335,6 +1335,11 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 #else /* VENDOR_EDIT */
 	wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_CS);
 #endif /* VENDOR_EDIT */
+
+	if (mbhc->current_plug == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
+		mbhc->current_plug = MBHC_PLUG_TYPE_NONE;
+		goto correct_plug_type;
+	}
 
 	/* Enable HW FSM */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
@@ -1368,22 +1373,23 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 			plug_type = MBHC_PLUG_TYPE_INVALID;
 	}
 
-	do {
+/*	do {
 		cross_conn = wcd_check_cross_conn(mbhc);
 		try++;
-	} while (try < GND_MIC_SWAP_THRESHOLD);
+	} while (try < GND_MIC_SWAP_THRESHOLD);*/
+
 	/*
 	 * check for cross coneection 4 times.
 	 * conisder the result of the fourth iteration.
 	 */
-	if (cross_conn > 0) {
+	/*if (cross_conn > 0) {
 		pr_debug("%s: cross con found, start polling\n",
 			 __func__);
 		plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
 		pr_debug("%s: Plug found, plug type is %d\n",
 			 __func__, plug_type);
 		goto correct_plug_type;
-	}
+	}*/
     #ifndef VENDOR_EDIT
     //John.Xu@PhoneSw.AudioDriver, 2015/11/23, Modify for headset dectect
     /*

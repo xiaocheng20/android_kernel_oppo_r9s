@@ -373,28 +373,6 @@ radix_tree_iter_init(struct radix_tree_iter *iter, unsigned long start)
 void **radix_tree_next_chunk(struct radix_tree_root *root,
 			     struct radix_tree_iter *iter, unsigned flags);
 
-#ifdef VENDOR_EDIT
-/* Hui.Fan@BSP.Kernel.Lib, 2016-09-12
- * merge kernel community patch to fix radix-tree race in gang lookup
- */
-/**
- * radix_tree_iter_retry - retry this chunk of the iteration
- * @iter:	iterator state
- *
- * If we iterate over a tree protected only by the RCU lock, a race
- * against deletion or creation may result in seeing a slot for which
- * radix_tree_deref_retry() returns true.  If so, call this function
- * and continue the iteration.
- */
-static inline __must_check
-void **radix_tree_iter_retry(struct radix_tree_iter *iter)
-{
-	iter->next_index = iter->index;
-	iter->tags = 0;
-	return NULL;
-}
-#endif /* VENDOR_EDIT */
-
 /**
  * radix_tree_iter_retry - retry this chunk of the iteration
  * @iter:	iterator state

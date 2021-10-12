@@ -2063,12 +2063,9 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: msm_route_ec_ref_rx = %d\n",
 	    __func__, msm_route_ec_ref_rx);
 	mutex_unlock(&routing_lock);
-	#ifndef VENDOR_EDIT
-	/*ping.zhang@PhoneSw.AudioDriver, 2017/02/04, Add for feedback because of strcmp error in snd*/
+
 	snd_soc_dapm_mux_update_power(widget->dapm, kcontrol, mux, e, update);
-	#else
-	snd_soc_dapm_mux_update_power(widget->dapm, kcontrol, msm_route_ec_ref_rx, e, update);
-	#endif/* VENDOR_EDIT */
+
 	return 0;
 }
 
