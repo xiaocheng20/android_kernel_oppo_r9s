@@ -15,7 +15,12 @@
 
 static void *lzo_create(void)
 {
+#ifndef VENDOR_EDIT
+//yixue.ge@bsp.drv 20160810 modify for kernel patch 40942069b040b0e2908077292a29111d20b2287d
 	return kzalloc(LZO1X_MEM_COMPRESS, GFP_KERNEL);
+#else
+	return kzalloc(LZO1X_MEM_COMPRESS, GFP_NOIO);
+#endif
 }
 
 static void lzo_destroy(void *private)
