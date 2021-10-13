@@ -3500,12 +3500,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		usb_unregister_atomic_notify(&mdwc->usbdev_nb);
 		if (!IS_ERR(mdwc->vbus_reg))
 			ret = regulator_disable(mdwc->vbus_reg);
-		#ifdef VENDOR_EDIT
-		//PengNan@SW.BSP add for the otg_online for the framework 2016/07/25
-			mdwc->otg_online = false;
-			pr_err("%s:disable_regulator\n",__func__);
-		#endif
-		}
+
 		if (ret) {
 			dev_err(mdwc->dev, "unable to disable vbus_reg\n");
 			return ret;

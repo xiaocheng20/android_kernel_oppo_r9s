@@ -5127,10 +5127,6 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 	int need_cleanup;
 	int retire_cnt;
 	bool destroy_ctl = false;
-    #ifdef VENDOR_EDIT
-    /* Goushengjun@SWDP.MultiMedia, 2016/08/22  Add for 16017 FingerPrint Lock slow */
-    struct mdss_data_type *mdata;
-    #endif
 
 	if (!mfd)
 		return -ENODEV;
