@@ -5961,6 +5961,10 @@ out_put_task:
 	put_task_struct(p);
 	return retval;
 }
+#ifdef VENDOR_EDIT
+//jie.cheng@swdp.sh.hypnus,2016/09/01,export some kernel api
+EXPORT_SYMBOL(sched_setaffinity);
+#endif
 
 static int get_user_cpu_mask(unsigned long __user *user_mask_ptr, unsigned len,
 			     struct cpumask *new_mask)
@@ -10297,3 +10301,11 @@ void dump_cpu_task(int cpu)
 	pr_info("Task dump for CPU %d:\n", cpu);
 	sched_show_task(cpu_curr(cpu));
 }
+
+#ifdef VENDOR_EDIT
+/*fanhui@PhoneSW.BSP, 2016-06-23, get current task on one cpu*/
+struct task_struct *oppo_get_cpu_task(int cpu)
+{
+	return cpu_curr(cpu);
+}
+#endif /*VENDOR_EDIT*/
