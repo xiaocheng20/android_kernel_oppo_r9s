@@ -78,7 +78,7 @@
 
 //Shengjun.Gou@SWDP.MultiMedia, 2016/06/09,  Modify for 16017 LCD driver
 &dsi_samsung_oppo16017_ea8064_1080p_cmd {
-	qcom,mdss-dsi-panel-timings-8996 = [23 1e 08 09 05 03 04 a0
+	qcom,mdss-dsi-panel-timings-phy-v2 = [23 1e 08 09 05 03 04 a0
 		23 1e 08 09 05 03 04 a0
 		23 1e 08 09 05 03 04 a0
 		23 1e 08 09 05 03 04 a0
